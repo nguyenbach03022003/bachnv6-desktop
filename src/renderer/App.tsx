@@ -178,7 +178,7 @@ function formatUpdated(value: string | number | null) {
   if (value === null) return 'No update yet';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? 'Update time unavailable'
-    : `Updated ${date.toLocaleString([], { hour: 'numeric', minute: '2-digit' })}`;
+    : `Updated ${date.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
 }
 
 function WeatherPanel() {
@@ -289,8 +289,8 @@ function WeatherPanel() {
         </div>
       )}
       <div className={styles.weatherLocation}>
-        <span>{snapshot?.location.name ?? 'Ha Noi'}, {snapshot?.location.countryCode ?? 'VN'}</span>
-        <small>{snapshot?.location.admin1 || snapshot?.location.country || 'Viet Nam'}</small>
+        <span>{snapshot?.location.name ?? 'Hanoi'}, {snapshot?.location.countryCode ?? 'VN'}</span>
+        <small>{snapshot?.location.admin1 || snapshot?.location.country || 'Vietnam'}</small>
       </div>
       <div className={styles.weatherNow}>
         <div className={styles.weatherTemperature}>{snapshot?.current ? Math.round(snapshot.current.temperatureC) : '—'}<span>°C</span></div>
@@ -304,7 +304,7 @@ function WeatherPanel() {
       <div className={styles.weatherForecast} aria-label="Three day forecast">
         {snapshot?.forecast.length ? snapshot.forecast.map((day, index) => (
           <div key={day.date}>
-            <span>{index === 0 ? 'Today' : new Intl.DateTimeFormat(undefined, { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${day.date}T12:00:00Z`))}</span>
+            <span>{index === 0 ? 'Today' : new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${day.date}T12:00:00Z`))}</span>
             <Icon name={weatherCondition(day.weatherCode).icon} size={18} />
             <strong>{Math.round(day.maxTemperatureC)}° <small>{Math.round(day.minTemperatureC)}°</small></strong>
           </div>
@@ -321,7 +321,7 @@ function formatReset(unixSeconds: number | null) {
   if (unixSeconds === null) return 'Reset time unavailable';
   const date = new Date(unixSeconds * 1000);
   if (Number.isNaN(date.getTime())) return 'Reset time unavailable';
-  return `Resets ${date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
+  return `Resets ${date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`;
 }
 
 function formatCreditAmount(balance: string | null): string | null {
@@ -427,7 +427,7 @@ function CodexUsagePanel() {
         </div>
         <div className={styles.aiBalance}>
           <span title="Earned rate-limit reset credits">Reset bank</span>
-          <strong>{resetBank === undefined ? 'Not reported' : `${resetBank.toLocaleString()} available`}</strong>
+          <strong>{resetBank === undefined ? 'Not reported' : `${resetBank.toLocaleString('en-US')} available`}</strong>
         </div>
       </div>
       {resetBank !== undefined && resetBank > 0 && (
@@ -439,7 +439,7 @@ function CodexUsagePanel() {
               <option value="">Next available reset</option>
               {resetChoices.map((credit, index) => (
                 <option key={credit.id} value={credit.id} title={credit.description ?? undefined}>
-                  {credit.title || `Reset ${index + 1}`}{credit.expiresAt ? ` · expires ${new Date(credit.expiresAt * 1000).toLocaleDateString()}` : ''}
+                  {credit.title || `Reset ${index + 1}`}{credit.expiresAt ? ` · expires ${new Date(credit.expiresAt * 1000).toLocaleDateString('en-US')}` : ''}
                 </option>
               ))}
             </select>

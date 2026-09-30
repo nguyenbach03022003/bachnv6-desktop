@@ -10,8 +10,8 @@ import { TRANSLATE_SELECTION_SHORTCUT } from './translation-shortcut';
 export function TranslatePanel({ className, translation }: { className: string; translation: TranslationController }) {
   const [actionStatus, setActionStatus] = useState<string | null>(null);
   const { text, editText, result, loading, error, autoTranslate, setAutoTranslate, translate, sourceLanguage, targetLanguage, swapLanguages } = translation;
-  const sourceLabel = sourceLanguage === 'en' ? 'English' : 'Tiếng Việt';
-  const targetLabel = targetLanguage === 'en' ? 'English' : 'Tiếng Việt';
+  const sourceLabel = sourceLanguage === 'en' ? 'English' : 'Vietnamese';
+  const targetLabel = targetLanguage === 'en' ? 'English' : 'Vietnamese';
   const bridge = window.dashboard;
 
   async function copy() {
@@ -45,7 +45,7 @@ export function TranslatePanel({ className, translation }: { className: string; 
       <form className={styles.form} onSubmit={(event) => { event.preventDefault(); setActionStatus(null); void translate(text); }}>
         <label htmlFor="translation-source">{sourceLabel}</label>
         <textarea id="translation-source" value={text} maxLength={MAX_TRANSLATION_LENGTH} spellCheck={false}
-          placeholder={sourceLanguage === 'en' ? 'Type English or highlight terminal text…' : 'Nhập tiếng Việt hoặc chọn văn bản trong terminal…'} lang={sourceLanguage} rows={3}
+          placeholder={`Type ${sourceLabel} or highlight terminal text…`} lang={sourceLanguage} rows={3}
           onChange={(event) => { editText(event.target.value); setActionStatus(null); }}
           onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void translate(text); } }} />
         <div className={styles.actions}>
@@ -55,8 +55,8 @@ export function TranslatePanel({ className, translation }: { className: string; 
       </form>
       <div className={styles.outputHeading}><span>{targetLabel}</span><button type="button" disabled={!result} onClick={() => { void copy(); }}>Copy</button></div>
       <div className={styles.output} role="status" aria-live="polite" lang={targetLanguage} aria-busy={loading}>
-        {loading ? <div className={styles.loading}><Arc size={15} /><span>{targetLanguage === 'vi' ? 'Đang dịch…' : 'Translating…'}</span></div>
-          : result ? result.translatedText : <span className={styles.placeholder}>{targetLanguage === 'vi' ? 'Bản dịch sẽ hiện ở đây.' : 'Translation will appear here.'}</span>}
+        {loading ? <div className={styles.loading}><Arc size={15} /><span lang="en">Translating…</span></div>
+          : result ? result.translatedText : <span className={styles.placeholder} lang="en">Translation will appear here.</span>}
       </div>
       {error && <p className={styles.error} role="alert">{error}</p>}
       {actionStatus && <p className={styles.actionStatus} role="status">{actionStatus}</p>}

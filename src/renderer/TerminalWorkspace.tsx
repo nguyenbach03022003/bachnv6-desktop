@@ -355,7 +355,7 @@ function TerminalPane({
           <button type="button" onMouseDown={(event) => event.preventDefault()}
             onClick={() => { const text = terminalRef.current?.getSelection(); if (text) void onTranslateSelection(text); }}
             disabled={!hasSelection} aria-keyshortcuts={TRANSLATE_SELECTION_ARIA_SHORTCUT}
-            title={`Translate selected English to Vietnamese (${TRANSLATE_SELECTION_SHORTCUT})`}>Translate</button>
+            title={`Translate selected text (${TRANSLATE_SELECTION_SHORTCUT})`}>Translate</button>
           <button type="button" onClick={() => { void copySelection(); }} disabled={!hasSelection} title="Copy selection (Ctrl+Shift+C)">Copy</button>
           <button type="button" onClick={() => { void pasteClipboard(); }} disabled={state.kind !== 'ready'} title="Paste clipboard (Ctrl+Shift+V)">Paste</button>
           <button type="button" onClick={() => terminalRef.current?.clear()} disabled={!terminalRef.current} title="Clear terminal display">Clear</button>

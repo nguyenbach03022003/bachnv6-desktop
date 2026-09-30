@@ -76,7 +76,7 @@ Use [`loading-dev`](https://github.com/jakubkrehel/loading) for brief loading st
 
 ## Integration decisions
 
-- The default weather city is Ha Noi, Viet Nam. Users can search for and save another city; the app does not request device location.
+- The default weather city is Hanoi, Vietnam. Users can search for and save another city; the app does not request device location.
 - Google Translate replaces the gold service. Translation sends only highlighted or submitted snippets to Google, keeps its cache in memory, and offers the website as a fallback because the keyless endpoint is undocumented.
 - AI usage discovers local npm/NVM installations on Ubuntu and reads the signed-in Codex CLI through its app-server protocol. The app displays only rate-limit windows the CLI reports; it does not infer missing quota percentages.
 

@@ -49,7 +49,7 @@ function parseWords(value: unknown): string[] {
   const seen = new Set<string>();
   const words = value.split(/[,;\n]+/).map((word) => word.trim()).filter((word) => {
     if (!word) return false;
-    const key = word.toLocaleLowerCase();
+    const key = word.toLocaleLowerCase('en-US');
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -231,8 +231,8 @@ export function registerVocabularyIpc(getWindow: () => BrowserWindow | null): vo
     try {
       const needed = await serial(async () => {
         const existing = await load();
-        const keys = new Set(existing.map((card) => card.word.toLocaleLowerCase()));
-        const newWords = words.filter((word) => !keys.has(word.toLocaleLowerCase()));
+        const keys = new Set(existing.map((card) => card.word.toLocaleLowerCase('en-US')));
+        const newWords = words.filter((word) => !keys.has(word.toLocaleLowerCase('en-US')));
         if (existing.length + newWords.length > MAX_CARDS) throw new Error('Vocabulary card limit reached.');
         return newWords;
       });

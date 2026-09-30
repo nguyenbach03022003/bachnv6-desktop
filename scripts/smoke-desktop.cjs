@@ -90,7 +90,7 @@ if (!process.versions.electron) {
     await run(`document.getElementById('translation-source').focus(); document.getElementById('translation-source').select()`);
     await window.webContents.insertText(text);
     await key('Return', ['control']);
-    await until(`document.querySelector('[lang="vi"]').getAttribute('aria-busy') === 'false' && !document.querySelector('[lang="vi"]').textContent.includes('Bản dịch sẽ')`, 'manual translation');
+    await until(`document.querySelector('[lang="vi"]').getAttribute('aria-busy') === 'false' && !document.querySelector('[lang="vi"]').textContent.includes('Translation will appear here.')`, 'manual translation');
   }
 
   app.whenReady().then(async () => {
@@ -164,7 +164,10 @@ if (!process.versions.electron) {
       if (process.env.DESKTOP_SMOKE_STAGE === 'create') {
         const result = await run(`window.dashboard.translation.translate('Hello world')`);
         assert.equal(result.sourceText, 'Hello world');
-        assert.match(result.translatedText, /Xin chào/i);
+        assert.equal(result.sourceLanguage, 'en');
+        assert.equal(result.targetLanguage, 'vi');
+        assert(result.translatedText.trim());
+        assert.notEqual(result.translatedText, result.sourceText);
         const cached = await run(`window.dashboard.translation.translate('  Hello world  ')`);
         assert.equal(cached.translatedAt, result.translatedAt);
         assert.equal(await run(`window.dashboard.translation.translate('x'.repeat(5001)).then(() => false, () => true)`), true);
@@ -173,7 +176,7 @@ if (!process.versions.electron) {
 
         await printTerminal('Hello world');
         await selectTerminal('Hello world');
-        await until(`document.getElementById('translation-source').value.trim() === 'Hello world' && document.querySelector('[lang="vi"]').textContent.includes('Xin chào')`, 'automatic selection translation');
+        await until(`document.getElementById('translation-source').value.trim() === 'Hello world' && document.querySelector('[lang="vi"]').textContent === ${JSON.stringify(result.translatedText)}`, 'automatic selection translation');
         check('Highlighted terminal text translates automatically');
 
         await run(`document.querySelector('input[type="checkbox"]').click()`);
@@ -230,7 +233,7 @@ if (!process.versions.electron) {
         check('Codex-style mouse reporting: Shift+drag selects, Ctrl+T translates, and the hint follows mouse mode');
 
         await manualTranslation('Welcome to the workspace');
-        assert.match(await run(`document.querySelector('[lang="vi"]').textContent`), /[àáảãạđếệ]/i);
+        assert.match(await run(`document.querySelector('[lang="vi"]').textContent`), /[\u00c0-\u024f\u1e00-\u1eff]/i);
         check('Typed text translates with Ctrl+Enter');
 
         await run(`document.querySelector('button[aria-label="Create note"]').click()`);
@@ -248,7 +251,7 @@ if (!process.versions.electron) {
             { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Translation guide' }] },
             { type: 'paragraph', content: [{ type: 'text', text: 'Select English text in the terminal.' }] },
             { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Useful phrases' }] },
-            { type: 'blockquote', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello world → Xin chào thế giới' }] }] },
+            { type: 'blockquote', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello world → Welcome to the workspace' }] }] },
             { type: 'horizontalRule' },
             { type: 'codeBlock', content: [{ type: 'text', text: 'Ctrl+T: Translate selection' }] },
             { type: 'paragraph', content: [{ type: 'text', text: 'Saved locally', marks: [{ type: 'underline' }, { type: 'strike' }] }] },

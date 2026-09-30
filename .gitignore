@@ -28,6 +28,8 @@ coverage/
 *.so
 *.dll
 *.pdb
+*.app/
+*.snap
 
 # Logs and local environment files
 *.log
@@ -37,6 +39,29 @@ coverage/
 !.env.*.example
 !.env.sample
 !.env.*.sample
+
+# Local credentials, keys, and application profiles
+.npmrc
+.pypirc
+.netrc
+.git-credentials
+.bash_history
+.zsh_history
+.codex/
+.ssh/
+.aws/
+.azure/
+*.pem
+*.key
+*.pfx
+*.p12
+auth.json
+credentials.json
+/user-data/
+/userData/
+/userdata/
+/.config/
+/.local/
 
 # Editor, operating system, and Python caches
 .idea/

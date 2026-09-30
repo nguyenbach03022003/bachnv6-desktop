@@ -20,8 +20,8 @@ const MAX_SEARCH_CACHE_ENTRIES = 50;
 
 export const DEFAULT_WEATHER_LOCATION: WeatherLocation = {
   id: 1581130,
-  name: 'Ha Noi',
-  country: 'Viet Nam',
+  name: 'Hanoi',
+  country: 'Vietnam',
   countryCode: 'VN',
   latitude: 21.0245,
   longitude: 105.84117,
