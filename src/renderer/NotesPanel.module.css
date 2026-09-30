@@ -1,0 +1,148 @@
+.panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 320px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-background, linear-gradient(158deg, #171e28 0%, #121821 58%, #10161f 100%));
+  box-shadow: var(--panel-shadow, 0 8px 28px rgba(0, 0, 0, .13), inset 0 1px rgba(255, 255, 255, .025));
+  overflow: hidden;
+}
+
+.spaceTabs { display: flex; gap: 5px; flex: 0 0 auto; margin-bottom: 11px; }
+.spaceTabs button { flex: 1; min-height: 28px; padding: 3px 5px; border: 1px solid var(--border, #35404e); border-radius: 6px; color: var(--text-secondary, #9eb0be); background: var(--surface-hover, #202a35); font: inherit; font-size: 10px; font-weight: 650; cursor: pointer; }
+.spaceTabs button:hover { border-color: var(--accent-border, #70867a); color: var(--text-primary, #ecf3eb); }
+.spaceTabs button[aria-pressed='true'] { border-color: var(--accent-border, #8daa78); color: var(--text-primary, #e6f3df); background: var(--accent-surface-hover, #35472f); }
+
+.heading, .headingTitle, .notePicker, .toolbar, .formatButtons, .colorRow, .swatches {
+  display: flex;
+  align-items: center;
+}
+
+.heading { justify-content: space-between; gap: 8px; min-height: 22px; }
+.headingTitle { gap: 8px; color: var(--text-secondary, #9dacbc); }
+.headingTitle h2 { margin: 0; color: var(--text-primary, #edf1f5); font-size: 12px; font-weight: 700; letter-spacing: .005em; }
+
+.newButton, .notePicker button, .formatButtons button, .attachButton, .structureRow button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 1px solid var(--border, #35404e);
+  border-radius: 5px;
+  color: var(--text-secondary, #b8c7d4);
+  background: var(--surface-hover, #202a35);
+  cursor: pointer;
+}
+.newButton { min-height: 22px; padding: 1px 6px; font-size: 10px; font-weight: 650; }
+.newButton:hover:not(:disabled), .notePicker button:hover:not(:disabled),
+.formatButtons button:hover:not(:disabled), .attachButton:hover:not(:disabled), .structureRow button:hover:not(:disabled) {
+  color: var(--text-primary, #f2f6f9);
+  border-color: var(--accent-border, #5e7387);
+  background: var(--surface-hover, #2c3a47);
+}
+.newButton:disabled, .notePicker button:disabled, .formatButtons button:disabled,
+.attachButton:disabled, .structureRow button:disabled { opacity: .5; cursor: default; }
+
+.notePicker { gap: 6px; margin-top: 11px; }
+.notePicker select {
+  width: 100%;
+  min-width: 0;
+  height: 27px;
+  padding: 3px 7px;
+  border: 1px solid var(--border, #35404e);
+  border-radius: 5px;
+  color: var(--text-primary, #e1e8ed);
+  background: var(--surface-hover, #202a35);
+  font: inherit;
+  font-size: 11px;
+}
+.notePicker button { flex: 0 0 27px; height: 27px; padding: 0; }
+
+.noteBody { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
+.structureRow { display: flex; gap: 6px; margin-top: 9px; }
+.structureRow select { flex: 1; min-width: 0; height: 27px; padding: 3px 7px; border: 1px solid var(--border, #35404e); border-radius: 5px; color: var(--text-primary, #e1e8ed); background: var(--surface-hover, #202a35); font: inherit; font-size: 11px; }
+.structureRow button { flex: 0 0 27px; height: 27px; padding: 0; }
+.toolbar { justify-content: space-between; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.formatButtons { flex-wrap: wrap; gap: 3px; }
+.formatButtons button, .attachButton { width: 24px; height: 25px; padding: 0; }
+.formatButtons button[aria-pressed='true'] { color: var(--text-primary, #17202b); border-color: var(--accent-border, #d5c190); background: var(--accent, #ebd39b); }
+.colorRow { justify-content: space-between; gap: 6px; min-height: 24px; margin: 5px 0 6px; color: var(--text-secondary, #95a4b2); font-size: 10px; }
+.swatches { gap: 7px; }
+.swatches button { width: 15px; height: 15px; padding: 0; border: 2px solid var(--border, #1a222d); border-radius: 50%; outline: 1px solid transparent; cursor: pointer; }
+.swatches button:hover { transform: scale(1.12); }
+.swatches button[aria-pressed='true'] { outline-color: var(--text-primary, #d6e0e9); }
+.swatches button:disabled { opacity: .5; cursor: default; transform: none; }
+.amber { background: #efd186; }
+.violet { background: #c9aee6; }
+.mint { background: #a5dbbe; }
+
+.paper {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 105px;
+  padding: 10px;
+  border: 1px solid var(--note-border);
+  border-radius: 8px;
+  color: #33312c;
+  background: var(--note-background);
+  box-shadow: 0 9px 18px rgba(0, 0, 0, .13);
+  overflow: auto;
+}
+.paperamber { --note-background: #f8e0a4; --note-border: #ffdd84; }
+.paperviolet { --note-background: #d9c7f4; --note-border: #d7b9ff; }
+.papermint { --note-background: #c4eedb; --note-border: #a8e9c9; }
+.editor { flex: 1 0 70px; min-height: 70px; }
+.editable { min-height: 70px; outline: 0; color: #35332c; font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
+.editable > :first-child { margin-top: 0; }
+.editable > :last-child { margin-bottom: 0; }
+.editable p { margin: 0 0 12px; }
+.editable h1, .editable h2, .editable h3, .editable h4, .editable h5, .editable h6 { margin: 18px 0 9px; color: #29271f; font-weight: 750; line-height: 1.3; }
+.editable h1 { padding-bottom: 7px; border-bottom: 1px solid #6c60384d; font-size: 21px; letter-spacing: -.025em; }
+.editable h2 { font-size: 17px; }
+.editable h3 { font-size: 14px; }
+.editable h4, .editable h5, .editable h6 { font-size: 12px; }
+.editable h5, .editable h6 { color: #635a47; }
+.editable blockquote { margin: 14px 0; padding: 7px 10px; border-left: 3px solid #6e654a; color: #60573f; background: #ffffff30; }
+.editable blockquote p:last-child { margin-bottom: 0; }
+.editable pre { margin: 12px 0; padding: 10px; border-radius: 5px; color: #f0e5c6; background: #35372f; font: 11px/1.5 var(--mono); white-space: pre-wrap; }
+.editable code { padding: 1px 3px; border-radius: 3px; background: #35372f1c; font-family: var(--mono); font-size: .92em; }
+.editable pre code { padding: 0; color: inherit; background: transparent; font-size: inherit; }
+.editable hr { margin: 18px 0; border: 0; border-top: 1px solid #6c603870; }
+.editable ul, .editable ol { margin: 0 0 12px; padding-left: 20px; }
+.editable li + li { margin-top: 4px; }
+.editable li p { margin: 0; }
+.editable:focus-visible { outline: 2px solid rgba(64, 82, 98, .65); outline-offset: 4px; border-radius: 2px; }
+.editable:empty::before { content: 'Write a note…'; color: #777163; pointer-events: none; }
+
+.attachments { display: grid; gap: 7px; padding-top: 8px; border-top: 1px solid rgba(51, 49, 44, .16); }
+.attachment { min-width: 0; overflow: hidden; border: 1px solid rgba(51, 49, 44, .2); border-radius: 5px; background: rgba(255, 255, 255, .25); }
+.attachment img { display: block; width: 100%; max-height: 120px; object-fit: contain; }
+.attachmentFallback { display: block; padding: 10px; color: #665f53; font-size: 10px; }
+.attachmentCaption { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-height: 22px; padding: 2px 4px; }
+.attachmentCaption span { min-width: 0; overflow: hidden; color: #514d44; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.attachmentCaption button { display: grid; place-items: center; flex: 0 0 20px; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 3px; color: #554e43; background: transparent; cursor: pointer; }
+.attachmentCaption button:hover { background: rgba(63, 54, 43, .16); }
+
+.saveStatus { min-height: 14px; margin-top: 7px; color: var(--text-secondary, #8193a1); font-size: 9px; line-height: 1.3; }
+.message, .error { margin: 13px 0 0; color: var(--text-secondary, #95a4b2); font-size: 11px; line-height: 1.4; }
+.error { color: var(--text-error, #e9a49f); }
+.empty { display: flex; flex: 1 1 auto; flex-direction: column; align-items: center; justify-content: center; gap: 11px; color: var(--text-secondary, #9dabb7); font-size: 11px; }
+.empty button { padding: 6px 9px; border: 1px solid var(--accent-border, #64788b); border-radius: 5px; color: var(--text-primary, #eaf1f5); background: var(--surface-hover, #293845); font: inherit; font-size: 10px; cursor: pointer; }
+.empty button:hover:not(:disabled) { background: var(--surface-hover, #344859); }
+
+@media (max-width: 1100px) and (min-width: 981px) {
+  .panel { padding-inline: 12px; }
+}
+
+@media (max-width: 980px) {
+  .panel { min-height: 320px; }
+}
+
+@media (max-width: 680px) {
+  .panel { min-height: 320px; }
+}

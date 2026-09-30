@@ -1,0 +1,47 @@
+{
+  "name": "bachnv6-desktop",
+  "productName": "Bachnv6 Desktop",
+  "version": "0.4.10",
+  "description": "A personal desktop dashboard for Windows and Linux",
+  "author": "Bachnv6",
+  "license": "UNLICENSED",
+  "main": ".vite/build/main.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "typecheck": "tsc --noEmit",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "make:ubuntu": "node scripts/build-ubuntu.cjs",
+    "smoke:desktop": "node scripts/smoke-desktop.cjs",
+    "smoke:theme": "node scripts/smoke-theme.cjs"
+  },
+  "dependencies": {
+    "@tiptap/react": "^3.31.3",
+    "@tiptap/starter-kit": "^3.31.3",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "loading-dev": "^0.3.4",
+    "lucide": "^1.48.0",
+    "morphicons": "^1.7.1",
+    "node-pty": "^1.1.0",
+    "page-mascot": "^0.1.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "systeminformation": "^5.33.13"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.11.2",
+    "@electron-forge/maker-deb": "^7.11.2",
+    "@electron-forge/maker-rpm": "^7.11.2",
+    "@electron-forge/maker-squirrel": "^7.11.2",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.11.2",
+    "@electron-forge/plugin-vite": "^7.11.2",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^44.4.5",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.1"
+  }
+}

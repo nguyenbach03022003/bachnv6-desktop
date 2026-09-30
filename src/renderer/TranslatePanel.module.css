@@ -1,0 +1,29 @@
+.panel { gap: 9px; overflow-y: auto; }
+.heading, .title, .actions, .outputHeading { display: flex; align-items: center; }
+.heading { justify-content: space-between; gap: 6px; }
+.title { gap: 7px; min-width: 0; color: var(--text-secondary, #9dacbc); }
+.title h2 { margin: 0; color: var(--text-primary, #edf1f5); font-size: 12px; font-weight: 700; }
+.tag { flex: 0 0 auto; color: var(--accent-text, #b9db9d); font-size: 9px; font-weight: 650; }
+.languageRow { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--text-secondary, #b8c7d4); font-size: 11px; font-weight: 650; }
+.swapButton { display: grid; place-items: center; flex: 0 0 30px; min-height: 30px; padding: 5px; border: 1px solid var(--border, #354553); border-radius: 6px; color: var(--accent-text, #b9db9d); background: var(--accent-surface, #2b3d29); cursor: pointer; }
+.swapButton:hover { border-color: var(--accent-border, #8fa776); }
+.autoToggle { display: flex; align-items: center; gap: 5px; color: var(--text-secondary, #b8c7d4); font-size: 10px; line-height: 1.4; cursor: pointer; }
+.autoToggle input { margin: 0; accent-color: var(--accent, #a9d878); }
+.form { display: flex; flex-direction: column; gap: 5px; }
+.form > label, .outputHeading > span { color: var(--text-secondary, #9cabb8); font-size: 10px; font-weight: 650; }
+.form textarea { width: 100%; min-height: 68px; max-height: 180px; resize: vertical; padding: 8px; border: 1px solid var(--border, #354553); border-radius: 6px; color: var(--text-primary, #e0e8ef); background: var(--surface-inset, #0e1720); font: inherit; font-size: 11px; line-height: 1.5; }
+.form textarea:focus { outline: 1px solid var(--accent-border, #a9d878); }
+.form textarea::placeholder { color: var(--text-muted, #788b9a); }
+.actions { gap: 5px; flex-wrap: wrap; }
+.actions button, .outputHeading button { min-height: 25px; padding: 4px 6px; border: 1px solid var(--border, #354553); border-radius: 5px; color: var(--text-secondary, #b9c8d5); background: var(--surface-hover, #202c37); font-size: 10px; cursor: pointer; }
+.actions .translateButton { color: var(--text-primary, #d9eacc); border-color: var(--accent-border, #506f45); background: var(--accent-surface, #2b3d29); }
+.actions button:hover:not(:disabled), .outputHeading button:hover:not(:disabled) { color: var(--text-primary, #fff); border-color: var(--accent-border, #8fa776); }
+.actions button:disabled, .outputHeading button:disabled { opacity: .45; cursor: default; }
+.outputHeading { justify-content: space-between; gap: 6px; }
+.output { flex: 1 0 60px; min-height: 60px; padding: 8px; border: 1px solid var(--border, #354553); border-radius: 6px; color: var(--accent-text, #dceccc); background: var(--accent-surface, #15221d); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.placeholder { color: var(--accent-text, #81958b); font-size: 11px; }
+.loading { display: flex; align-items: center; gap: 6px; color: var(--accent-text, #a9c599); font-size: 11px; }
+.error, .actionStatus, .footnote { margin: 0; font-size: 10px; line-height: 1.4; overflow-wrap: anywhere; }
+.error { color: var(--text-error, #efb5aa); }
+.actionStatus { color: var(--accent-text, #bedda6); }
+.footnote { color: var(--text-secondary, #8093a1); font-size: 9px; }

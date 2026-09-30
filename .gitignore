@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+
+# Build output and caches
+.vite/
+out/
+dist/
+build/
+coverage/
+.cache/
+.npm/
+*.tsbuildinfo
+.eslintcache
+
+# Generated binaries and installers
+*.asar
+*.asar.unpacked/
+*.node
+*.deb
+*.rpm
+*.AppImage
+*.dmg
+*.exe
+*.msi
+*.nupkg
+*.o
+*.obj
+*.so
+*.dll
+*.pdb
+
+# Logs and local environment files
+*.log
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.*.sample
+
+# Editor, operating system, and Python caches
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+__pycache__/
+*.py[cod]

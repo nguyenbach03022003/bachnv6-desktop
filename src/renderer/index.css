@@ -1,0 +1,58 @@
+:root {
+  font-family: Inter, 'Segoe UI', 'Ubuntu', system-ui, sans-serif;
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --mono: 'Cascadia Code', 'Cascadia Mono', 'Consolas', 'Liberation Mono', monospace;
+}
+
+/* Orange fur, cream highlights, and brown outlines from the desk companion. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --app-background: radial-gradient(circle at 50% -20%, #ffe2c4, transparent 50%), #faf3e9;
+  --header-background: #fff8ee;
+  --panel-background: linear-gradient(158deg, #fffaf3, #fff6ea);
+  --panel-shadow: 0 8px 28px #71411f0a, inset 0 1px #ffffffb3;
+  --companion-background: radial-gradient(circle at 50% 44%, #ffe1bd, #fff6e9 73%);
+  --surface-inset: #fff8ef;
+  --surface: #fff3e4;
+  --surface-hover: #f6e2cb;
+  --border: #dfcbb7;
+  --text-primary: #39271e;
+  --text-secondary: #684c3b;
+  --text-muted: #80624e;
+  --accent: #ed853d;
+  --accent-text: #a34819;
+  --accent-border: #ca9469;
+  --accent-surface: #ffe7ce;
+  --accent-surface-hover: #f8d1ab;
+  --text-error: #a82d2b;
+  --error-surface: #ffe4dd;
+  --metric-orange: #d46c29;
+  --metric-copper: #ac6440;
+  --metric-brown: #84604b;
+  --terminal-background: #fff0df;
+  --terminal-overlay: #fff0dff5;
+  --selection-background: #ffd3ad;
+  --selection-text: #39271e;
+  --focus-ring: #a34819;
+  --terminal-scrollbar: #ca9469;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; }
+
+body { background: var(--surface-inset, #0a0e14); }
+
+button, input { font: inherit; }
+
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--focus-ring, #b9e596);
+  outline-offset: 2px;
+}
+
+::selection { color: var(--selection-text, #0d1711); background: var(--selection-background, #b9e596); }
