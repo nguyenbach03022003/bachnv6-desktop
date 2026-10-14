@@ -9,6 +9,10 @@ import { registerWeatherIpc } from './weather-service';
 import { registerCodexUsageIpc } from './codex-usage-service';
 import { registerTranslationIpc } from './translation-service';
 import { registerVocabularyIpc } from './vocabulary-service';
+import { registerNotesWindows } from './notes-windows';
+import { registerCompanionIpc } from './companion-service';
+import { registerAiSettingsIpc } from './ai-settings-service';
+import { registerAiCliLifecycle } from './ai-cli';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -48,6 +52,16 @@ function handleSquirrelEvent(): boolean {
 const handlingSquirrelEvent = handleSquirrelEvent();
 
 let mainWindow: BrowserWindow | null = null;
+
+function loadRenderer(window: BrowserWindow, view?: 'notes' | 'image'): Promise<void> {
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    const url = new URL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+    if (view) url.hash = view;
+    return window.loadURL(url.toString());
+  }
+  return window.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
+    view ? { hash: view } : {});
+}
 
 function getWindowState(window: BrowserWindow): WindowState {
   return {
@@ -90,15 +104,9 @@ function createMainWindow(): void {
   window.webContents.on('will-navigate', (event) => event.preventDefault());
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    void window.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL).catch((error: unknown) => {
-      console.error('Could not load dashboard', error);
-    });
-  } else {
-    void window.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)).catch((error: unknown) => {
-      console.error('Could not load dashboard', error);
-    });
-  }
+  void loadRenderer(window).catch((error: unknown) => {
+    console.error('Could not load dashboard', error);
+  });
 }
 
 if (!handlingSquirrelEvent) app.whenReady().then(() => {
@@ -106,9 +114,13 @@ if (!handlingSquirrelEvent) app.whenReady().then(() => {
     callback(false);
   });
 
-  registerTerminalIpc(() => mainWindow);
-  registerNotesIpc(() => mainWindow);
-  registerVocabularyIpc(() => mainWindow);
+  registerAiSettingsIpc(() => mainWindow);
+  registerAiCliLifecycle();
+  const companion = registerCompanionIpc(() => mainWindow);
+  registerTerminalIpc(() => mainWindow, companion.trackTerminal);
+  const notes = registerNotesIpc(() => notesWindows.getEditorWindow());
+  const notesWindows = registerNotesWindows(() => mainWindow, loadRenderer, notes.readImage, createMainWindow);
+  registerVocabularyIpc(() => notesWindows.getEditorWindow());
   registerSystemMetricsIpc(() => mainWindow);
   registerWeatherIpc(() => mainWindow);
   registerCodexUsageIpc(() => mainWindow);
@@ -129,14 +141,18 @@ if (!handlingSquirrelEvent) app.whenReady().then(() => {
   });
 
   ipcMain.handle('window:state', (event) => {
-    const window = mainWindow;
-    if (!window || event.sender !== window.webContents) throw new Error('Unknown window');
+    const window = [mainWindow, ...notesWindows.getAuxiliaryWindows()].find((candidate) => candidate
+      && !candidate.isDestroyed() && event.sender === candidate.webContents
+      && event.senderFrame === candidate.webContents.mainFrame);
+    if (!window) throw new Error('Unknown window');
     return getWindowState(window);
   });
 
   ipcMain.handle('window:action', (event, action: unknown) => {
-    const window = mainWindow;
-    if (!window || event.sender !== window.webContents) throw new Error('Unknown window');
+    const window = [mainWindow, ...notesWindows.getAuxiliaryWindows()].find((candidate) => candidate
+      && !candidate.isDestroyed() && event.sender === candidate.webContents
+      && event.senderFrame === candidate.webContents.mainFrame);
+    if (!window) throw new Error('Unknown window');
     switch (action) {
       case 'minimize':
         window.minimize();

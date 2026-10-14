@@ -2,19 +2,21 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import {
   Cloud, CloudDrizzle, CloudFog, CloudLightning, CloudRain, CloudSnow, CloudSun,
   Cpu, LayoutGrid, MemoryStick, Minus, Moon, Pin, PinOff, RefreshCw, Search,
-  Sparkles, Square, Sun, Wifi, X, type IconNode,
+  Settings, Sparkles, Square, Sun, Wifi, X, type IconNode,
 } from 'lucide';
 import { MorphIcon } from 'morphicons/react';
 import type { CodexUsageSnapshot } from '../shared/codex-usage-types';
 import type { SystemMetricsSample } from '../shared/system-metrics-types';
 import type { WeatherLocation, WeatherSnapshot } from '../shared/weather-types';
-import { TranslatePanel } from './TranslatePanel';
-import { useTranslation } from './useTranslation';
-import { MascotWidget } from './MascotWidget';
-import { NotesPanel } from './NotesPanel';
+import { CompanionPanel } from './CompanionPanel';
+import { InputLanguageButton } from './InputLanguage';
+import { NotesWorkspace } from './NotesWorkspace';
 import { TerminalWorkspace } from './TerminalWorkspace';
 import styles from './App.module.css';
 import { applyTheme, readTheme, type AppTheme } from './theme';
+import { AI_PROVIDER_LABELS } from '../shared/ai-settings-types';
+import { SettingsDialog } from './SettingsDialog';
+import { useAiSettings } from './useAiSettings';
 
 type IconName =
   | 'cloud' | 'cloudDrizzle' | 'cloudFog' | 'cloudLightning' | 'cloudRain'
@@ -67,7 +69,7 @@ type MetricCardData = {
 
 function MetricCard({ card }: { card: MetricCardData }) {
   return (
-    <article className={`${styles.panel} ${styles.metricCard} ${styles[`tone${card.tone}`]}`}>
+    <div className={`${styles.metricCard} ${styles[`tone${card.tone}`]}`} aria-label={`${card.label} metric`}>
       <div className={styles.metricTop}>
         <div className={styles.metricLabel}><Icon name={card.icon} size={17} /><span>{card.label}</span></div>
         <span className={styles.statusTag}>{card.tag}</span>
@@ -81,7 +83,7 @@ function MetricCard({ card }: { card: MetricCardData }) {
           ))}
         </div>
       </div>
-    </article>
+    </div>
   );
 }
 
@@ -149,14 +151,8 @@ function SystemMetrics() {
     },
   ];
   return (
-    <section className={styles.metrics} aria-label="Live system metrics and desk companion">
-      <article className={`${styles.panel} ${styles.mascotTile}`} aria-label="Desk companion"
-        onClick={(event) => {
-          if ((event.target as HTMLElement).closest('button')) return;
-          event.currentTarget.querySelector('button')?.click();
-        }}>
-        <MascotWidget size={78} />
-      </article>
+    <section className={`${styles.panel} ${styles.metrics}`} aria-label="Live system metrics">
+      <PanelTitle icon="cpu" title="System" tag={tag} />
       {cards.map((card) => <MetricCard card={card} key={card.label} />)}
     </section>
   );
@@ -474,8 +470,10 @@ function CodexUsagePanel() {
 }
 
 export default function App() {
-  const translation = useTranslation();
   const [theme, setTheme] = useState<AppTheme>(readTheme);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const { settings: aiSettings, error: settingsError } = useAiSettings();
+  const providerLabel = AI_PROVIDER_LABELS[aiSettings.provider];
   const [isPinned, setIsPinned] = useState<boolean | null>(null);
   const windowControls = window.dashboard;
 
@@ -521,6 +519,9 @@ export default function App() {
         <div className={styles.pageTitle}><span>Workspace</span><span className={styles.slash}>/</span><strong>Overview</strong></div>
         <div className={styles.headerSpacer} />
         <span className={styles.previewPill}><span aria-hidden="true" />Local dashboard</span>
+        <InputLanguageButton />
+        <button type="button" className={styles.themeButton} aria-label="App settings" title="AI provider settings"
+          onClick={() => setSettingsOpen(true)}><MorphIcon icon={Settings} size={15} reducedMotion="user" aria-hidden="true" /><span>Settings</span></button>
         <button type="button" className={styles.themeButton} onClick={toggleTheme}
           aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
           title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>
@@ -546,26 +547,32 @@ export default function App() {
         </div>
       </header>
       <main className={styles.dashboard}>
-        <aside className={styles.leftColumn} aria-label="Weather and translation">
+        <aside className={styles.leftColumn} aria-label="Weather and desk companion">
           <WeatherPanel />
-          <TranslatePanel className={`${styles.panel} ${styles.translationPanel}`} translation={translation} />
+          <CompanionPanel className={`${styles.panel} ${styles.companionPanel}`} />
         </aside>
         <div className={styles.centerColumn}>
           <SystemMetrics />
           <section className={`${styles.panel} ${styles.terminalPanel}`} aria-label="Terminal workspace">
-            <TerminalWorkspace theme={theme} autoTranslate={translation.autoTranslate} onTranslateSelection={translation.translate} />
+            <TerminalWorkspace theme={theme} />
           </section>
         </div>
         <aside className={styles.rightColumn} aria-label="AI usage, notes, and vocabulary">
-          <CodexUsagePanel />
-          <NotesPanel />
+          {aiSettings.provider === 'codex' ? <CodexUsagePanel key={aiSettings.codex.executable} /> : <section className={`${styles.panel} ${styles.aiPanel}`} aria-label="Claude CLI usage">
+            <PanelTitle icon="sparkle" title="AI usage" tag="Claude" />
+            <p className={styles.aiIntro}>Claude CLI</p>
+            <p className={styles.aiEmpty}>Claude CLI is selected for fox chat and vocabulary. Usage reporting and earned resets are available only for Codex CLI.</p>
+            <p className={styles.panelFootnote}>Open Settings to change your provider.</p>
+          </section>}
+          <NotesWorkspace />
         </aside>
       </main>
       <footer className={styles.footer}>
         <span>Bachnv6 Desktop <span aria-hidden="true">·</span> Workspace</span>
-        <span>System · Open-Meteo · Google Translate · Codex CLI</span>
+        <span>{settingsError ? 'AI settings could not load · Open Settings to repair' : `System · Open-Meteo · Desk Companion · ${providerLabel}`}</span>
         <span>Windows + Linux</span>
       </footer>
+      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

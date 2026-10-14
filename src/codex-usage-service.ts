@@ -1,11 +1,10 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { app, BrowserWindow, ipcMain } from 'electron';
 import type { CodexCreditBalance, CodexResetBank, CodexResetOutcome, CodexResetResult, CodexUsageSnapshot, CodexUsageWindow } from './shared/codex-usage-types';
-import { findUnixCodexCommand } from './codex-cli';
+import { startCodexAppServer } from './ai-cli';
+import { getAiSettings } from './ai-settings-service';
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 20 * 1000;
@@ -14,19 +13,9 @@ let cached: CodexUsageSnapshot = {
   creditBalance: null, resetBank: null, error: null, nextRefreshAt: null,
 };
 let inFlight: Promise<CodexUsageSnapshot> | null = null;
+let inFlightSettings = '';
 let redemptionInFlight: Promise<CodexResetResult> | null = null;
 const activeChildren = new Map<ChildProcessWithoutNullStreams, boolean>();
-
-function findWindowsCodexExe(): string | null {
-  const pathValue = process.env.PATH || process.env.Path || '';
-  for (const entry of pathValue.split(path.delimiter)) {
-    const folder = entry.replace(/^"|"$/g, '').trim();
-    if (!folder) continue;
-    const candidate = path.join(folder, 'codex.exe');
-    if (existsSync(candidate)) return candidate;
-  }
-  return null;
-}
 
 function terminateChild(child: ChildProcessWithoutNullStreams, wrapper: boolean): void {
   if (child.exitCode !== null) return;
@@ -120,29 +109,16 @@ function parseResetBank(result: unknown): CodexResetBank | null {
   return { availableCount: count, credits };
 }
 
-function readCodexCli(consumeCreditId?: string | null): Promise<{
+async function readCodexCli(consumeCreditId?: string | null): Promise<{
   planType: string | null;
   windows: CodexUsageWindow[];
   creditBalance: CodexCreditBalance | null;
   resetBank: CodexResetBank | null;
   outcome: CodexResetOutcome | null;
 }> {
+  const child = await startCodexAppServer();
+  const wrapper = process.platform === 'win32';
   return new Promise((resolve, reject) => {
-    // Arguments are fixed; no renderer text is ever passed to a shell.
-    const directExe = process.platform === 'win32' ? findWindowsCodexExe() : null;
-    const wrapper = process.platform === 'win32' && directExe === null;
-    const unixCommand = process.platform === 'win32' ? null : findUnixCodexCommand();
-    const child = process.platform === 'win32'
-      ? spawn(directExe || process.env.ComSpec || 'cmd.exe', directExe
-        ? ['app-server'] : ['/d', '/s', '/c', 'codex app-server'], {
-        windowsHide: true,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      })
-      : spawn(unixCommand!.command, ['app-server'], {
-      windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: unixCommand!.env,
-    });
     activeChildren.set(child, wrapper);
     const lines = createInterface({ input: child.stdout });
     const pending = new Map<number, (response: JsonRecord) => void>();
@@ -261,10 +237,22 @@ function readCodexCli(consumeCreditId?: string | null): Promise<{
   });
 }
 
+let cachedSettings = '';
+
 async function getSnapshot(force: boolean): Promise<CodexUsageSnapshot> {
+  const settings = await getAiSettings();
+  if (settings.provider !== 'codex') return { status: 'unavailable', planType: null, windows: [], fetchedAt: null,
+    creditBalance: null, resetBank: null, error: 'Claude CLI usage reporting is not available in this app.', nextRefreshAt: null };
+  const key = JSON.stringify(settings.codex);
   if (redemptionInFlight) return (await redemptionInFlight).snapshot;
-  if (inFlight) return inFlight;
+  if (inFlight) {
+    if (inFlightSettings === key) return inFlight;
+    await inFlight;
+    return getSnapshot(true);
+  }
+  if (key !== cachedSettings) force = true;
   if (!force && cached.nextRefreshAt && Date.now() < cached.nextRefreshAt) return cached;
+  inFlightSettings = key;
   inFlight = (async () => {
     try {
       const { planType, windows, creditBalance, resetBank } = await readCodexCli();
@@ -278,6 +266,7 @@ async function getSnapshot(force: boolean): Promise<CodexUsageSnapshot> {
       cached = { status: 'unavailable', planType: null, windows: [], creditBalance: null, resetBank: null, fetchedAt: null,
         error: message, nextRefreshAt: now + REFRESH_INTERVAL_MS };
     }
+    cachedSettings = key;
     return cached;
   })();
   try { return await inFlight; } finally { inFlight = null; }

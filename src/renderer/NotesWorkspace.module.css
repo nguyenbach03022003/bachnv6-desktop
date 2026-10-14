@@ -1,0 +1,47 @@
+.placeholder {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 260px;
+  padding: 24px 16px;
+  border: 1px solid var(--border, #35404e);
+  border-radius: 14px;
+  color: var(--text-secondary, #9eb0be);
+  background: var(--panel-background, #121821);
+  text-align: center;
+}
+.placeholder h2 { margin: 0; color: var(--text-primary, #edf1f5); font-size: 14px; }
+.placeholder p { margin: 0; font-size: 12px; line-height: 1.6; }
+.placeholder button {
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid var(--accent-border, #64788b);
+  border-radius: 6px;
+  color: var(--text-primary, #eaf1f5);
+  background: var(--surface-hover, #293845);
+  cursor: pointer;
+  font-size: 12px;
+}
+.detachedShell {
+  display: flex;
+  justify-content: center;
+  height: 100vh;
+  min-height: 300px;
+  padding: 18px;
+  background: var(--app-background, #0b1019);
+}
+.detachedShell > section { width: 100%; max-width: 1100px; min-height: 0; }
+.detachedShell :global([aria-label='Note content']) { font-size: 16px; line-height: 1.8; }
+.detachedShell :global([aria-label='Note content']) h1 { font-size: 30px; }
+.detachedShell :global([aria-label='Note content']) h2 { font-size: 24px; }
+.detachedShell :global([aria-label='Note content']) h3 { font-size: 20px; }
+.detachedShell :global([aria-label='Note content']) h4,
+.detachedShell :global([aria-label='Note content']) h5,
+.detachedShell :global([aria-label='Note content']) h6 { font-size: 16px; }
+.detachedShell :global([aria-label='Note content']) pre { font-size: 14px; }
+.detachedShell :global(select) { height: 34px; font-size: 13px; }
+.detachedShell :global(fieldset) { min-height: 0; }
+@media (max-width: 500px) { .detachedShell { padding: 10px; } }

@@ -136,7 +136,7 @@ function homeDirectory(): string {
  * Register the dashboard's PTY IPC endpoints. Call once when Electron is ready.
  * The returned function can be used during main-process teardown.
  */
-export function registerTerminalIpc(getDashboardWindow: () => BrowserWindow | null): () => void {
+export function registerTerminalIpc(getDashboardWindow: () => BrowserWindow | null, trackTerminal?: (id: string) => Promise<string>): () => void {
   const sessions = new Map<string, TerminalSession>();
   const trackedWindows = new WeakSet<BrowserWindow>();
   let disposed = false;
@@ -188,7 +188,7 @@ export function registerTerminalIpc(getDashboardWindow: () => BrowserWindow | nu
     });
   }
 
-  ipcMain.handle('terminal:create', (event, request: unknown) => {
+  ipcMain.handle('terminal:create', async (event, request: unknown) => {
     const window = assertDashboardSender(event);
     const { cols, rows } = validateSize(request);
     if (sessions.size >= MAX_SESSIONS) throw new Error('Terminal session limit reached');
@@ -197,14 +197,19 @@ export function registerTerminalIpc(getDashboardWindow: () => BrowserWindow | nu
     const owner = window.webContents;
     const shell = selectShell();
     const cwd = homeDirectory();
+    const id = randomUUID();
+    const reportFile = await trackTerminal?.(id);
+    // A renderer can disappear while the report directory is being created.
+    assertDashboardSender(event);
+    if (sessions.size >= MAX_SESSIONS) throw new Error('Terminal session limit reached');
     const ptyProcess = pty.spawn(shell.executable, [], {
       name: 'xterm-256color',
       cols,
       rows,
       cwd,
-      env: { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' },
+      env: { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor',
+        ...(reportFile ? { DESK_COMPANION_REPORT: reportFile, DESK_COMPANION_SESSION: id } : {}) },
     });
-    const id = randomUUID();
 
     const sendData = (data: string) => {
       if (owner.isDestroyed() || sessions.get(id)?.owner !== owner) return;
@@ -226,7 +231,7 @@ export function registerTerminalIpc(getDashboardWindow: () => BrowserWindow | nu
       if (!owner.isDestroyed()) owner.send('terminal:exit', { id, exitCode, signal: signal ?? null });
     });
     sessions.set(id, { owner, process: ptyProcess, dataSubscription, exitSubscription });
-    return { id, shell: shell.label, cwd };
+    return { id, shell: shell.label, cwd, reportFile };
   });
 
   ipcMain.handle('terminal:write', (event, request: unknown) => {

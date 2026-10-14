@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Bold, ImagePlus, Italic, List, ListOrdered, Minus, Plus, Strikethrough, StickyNote as StickyNoteIcon, Trash2, Underline, X } from 'lucide';
+import { Bold, ExternalLink, ImagePlus, Italic, List, ListOrdered, Minus, Plus, Strikethrough, StickyNote as StickyNoteIcon, Trash2, Underline, X } from 'lucide';
 import { MorphIcon } from 'morphicons/react';
 import type { NoteAttachment, NoteColor, NoteContent, NoteContentNode, StickyNote } from '../shared/notes-types';
 import styles from './NotesPanel.module.css';
 import { VocabularyPanel } from './VocabularyPanel';
+import { InputLanguageButton } from './InputLanguage';
 
 type SaveStatus = { noteId: string; kind: 'saved' | 'unsaved' | 'saving' | 'error' } | null;
 
@@ -41,6 +42,7 @@ function AttachmentPreview({
   onRemove: (attachmentId: string) => void;
 }) {
   const [source, setSource] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
     void window.dashboard?.notes?.readAttachment(noteId, attachment.id).then((dataUrl) => {
@@ -53,13 +55,20 @@ function AttachmentPreview({
 
   return (
     <div className={styles.attachment}>
-      {source ? <img src={source} alt={attachment.name} /> : <span className={styles.attachmentFallback}>Image unavailable</span>}
+      {source ? <button type="button" className={styles.imageButton} aria-label={`View ${attachment.name}`} title="Open image in a larger window"
+        onClick={() => {
+          setError(null);
+          void window.dashboard?.notesWorkspace.openImage(noteId, attachment.id).catch((cause: unknown) => {
+            setError(cause instanceof Error ? cause.message : 'Could not open this image.');
+          });
+        }}><img src={source} alt={attachment.name} /></button> : <span className={styles.attachmentFallback}>Image unavailable</span>}
       <div className={styles.attachmentCaption}>
         <span title={attachment.name}>{attachment.name}</span>
         <button type="button" aria-label={`Remove ${attachment.name}`} title="Remove attachment" onClick={() => onRemove(attachment.id)}>
           <MorphIcon icon={X} size={13} reducedMotion="user" />
         </button>
       </div>
+      {error && <p className={styles.error} role="alert">{error}</p>}
     </div>
   );
 }
@@ -68,6 +77,7 @@ function NoteEditor({
   note,
   status,
   busy,
+  readOnly,
   onChange,
   onBlur,
   onColor,
@@ -77,6 +87,7 @@ function NoteEditor({
   note: StickyNote;
   status: SaveStatus;
   busy: boolean;
+  readOnly: boolean;
   onChange: (id: string, content: NoteContent) => void;
   onBlur: (id: string) => void;
   onColor: (id: string, color: NoteColor) => void;
@@ -96,6 +107,8 @@ function NoteEditor({
     onUpdate: ({ editor: current }) => onChange(note.id, current.getJSON() as NoteContent),
     onBlur: () => onBlur(note.id),
   }, [note.id]);
+
+  useEffect(() => { editor?.setEditable(!readOnly, false); }, [editor, readOnly]);
 
   useEffect(() => {
     if (!editor) return;
@@ -207,14 +220,20 @@ function NoteEditor({
   );
 }
 
-export function NotesPanel() {
+export function NotesPanel({ initialSelectedId = null, detached = false }: {
+  initialSelectedId?: string | null;
+  detached?: boolean;
+}) {
   const notesApi = window.dashboard?.notes;
   const [space, setSpace] = useState<'notes' | 'vocabulary'>(() =>
     window.localStorage.getItem('bachnv6-note-space') === 'vocabulary' ? 'vocabulary' : 'notes');
   const [notes, setNotes] = useState<StickyNote[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [transferring, setTransferring] = useState(false);
+  const [vocabularyBusy, setVocabularyBusy] = useState(false);
+  const transferInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>(null);
   const pending = useRef(new Map<string, NoteContent>());
@@ -226,6 +245,22 @@ export function NotesPanel() {
   const allowUnload = useRef(false);
   const closePending = useRef(false);
   const selectedNote = useMemo(() => notes.find((note) => note.id === selectedId) ?? null, [notes, selectedId]);
+
+  useEffect(() => {
+    if (loading) return;
+    void window.dashboard?.notesWorkspace.setContext({ selectedId, space }).catch(() => undefined);
+  }, [loading, selectedId, space]);
+
+  useEffect(() => {
+    if (!detached) return;
+    return window.dashboard?.notesWorkspace.onMergeRequested(() => {
+      if (busy || vocabularyBusy || transferring) {
+        setError('Please wait for the current operation to finish before merging.');
+        return;
+      }
+      void window.dashboard?.close().catch(() => setError('Could not merge the notes window.'));
+    });
+  }, [detached, busy, vocabularyBusy, transferring]);
 
   useEffect(() => {
     if (!notesApi) {
@@ -245,6 +280,27 @@ export function NotesPanel() {
     });
     return () => { active = false; };
   }, [notesApi]);
+
+  async function detachNotes(): Promise<void> {
+    if (busy || vocabularyBusy || transferInFlight.current || !window.dashboard) return;
+    transferInFlight.current = true;
+    setTransferring(true);
+    setError(null);
+    const initialFailures = saveFailureCount.current;
+    try {
+      do {
+        await Promise.all([...pending.current.keys()].map((id) => flushNote(id)));
+        await saveTail.current;
+        if (saveFailureCount.current !== initialFailures) throw new Error('Could not save your latest edit. Please retry before detaching.');
+      } while (pending.current.size || writesInFlight.current);
+      await window.dashboard.notesWorkspace.detach({ selectedId, space });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not open the notes window.');
+    } finally {
+      transferInFlight.current = false;
+      setTransferring(false);
+    }
+  }
 
   const flushNote = useCallback((id: string): Promise<void> => {
     const timer = timers.current.get(id);
@@ -422,19 +478,29 @@ export function NotesPanel() {
 
   return (
     <section className={styles.panel} aria-label="Notes and vocabulary">
+      <div className={styles.workspaceActions}>
+      {detached && <InputLanguageButton />}
       <div className={styles.spaceTabs} role="group" aria-label="Choose learning space">
-        <button type="button" aria-pressed={space === 'notes'} onClick={() => {
+        <button type="button" disabled={busy || vocabularyBusy || transferring} aria-pressed={space === 'notes'} onClick={() => {
           if (selectedId) void flushNote(selectedId);
           setSpace('notes');
           window.localStorage.setItem('bachnv6-note-space', 'notes');
         }}>Sticky notes</button>
-        <button type="button" aria-pressed={space === 'vocabulary'} onClick={() => {
+        <button type="button" disabled={busy || vocabularyBusy || transferring} aria-pressed={space === 'vocabulary'} onClick={() => {
           if (selectedId) void flushNote(selectedId);
           setSpace('vocabulary');
           window.localStorage.setItem('bachnv6-note-space', 'vocabulary');
         }}>Vocabulary</button>
       </div>
-      {space === 'vocabulary' ? <VocabularyPanel /> : <>
+        <button type="button" className={styles.newButton} disabled={!notesApi || loading || busy || vocabularyBusy || transferring}
+          aria-label={detached ? 'Merge notes into dashboard' : 'Detach notes window'}
+          onClick={() => {
+            if (detached) void window.dashboard?.notesWorkspace.merge().catch(() => setError('Could not merge the notes window.'));
+            else void detachNotes();
+          }}><MorphIcon icon={ExternalLink} size={14} reducedMotion="user" />{detached ? 'Merge back' : transferring ? 'Saving…' : 'Detach'}</button>
+      </div>
+      <fieldset className={styles.controls} disabled={transferring}>
+      {space === 'vocabulary' ? <VocabularyPanel onBusyChange={setVocabularyBusy} /> : <>
       <div className={styles.heading}>
         <div className={styles.headingTitle}>
           <MorphIcon icon={StickyNoteIcon} size={17} reducedMotion="user" aria-hidden="true" />
@@ -467,15 +533,16 @@ export function NotesPanel() {
               <MorphIcon icon={Trash2} size={15} reducedMotion="user" />
             </button>
           </div>
-          {selectedNote && <NoteEditor key={selectedNote.id} note={selectedNote} status={saveStatus} busy={busy}
+          {selectedNote && <NoteEditor key={selectedNote.id} note={selectedNote} status={saveStatus} busy={busy} readOnly={transferring}
             onChange={changeContent} onBlur={(id) => { void flushNote(id); }}
             onColor={(id, color) => { void recolorNote(id, color); }}
             onPickAttachment={(id) => { void pickAttachment(id); }}
             onRemoveAttachment={(id, attachmentId) => { void removeAttachment(id, attachmentId); }} />}
         </>
       )}
-      {error && <p className={styles.error} role="alert">{error}</p>}
       </>}
+      </fieldset>
+      {error && <p className={styles.error} role="alert">{error}</p>}
     </section>
   );
 }

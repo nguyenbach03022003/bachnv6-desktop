@@ -9,10 +9,16 @@
   border-radius: 14px;
   background: var(--panel-background, linear-gradient(158deg, #171e28 0%, #121821 58%, #10161f 100%));
   box-shadow: var(--panel-shadow, 0 8px 28px rgba(0, 0, 0, .13), inset 0 1px rgba(255, 255, 255, .025));
-  overflow: hidden;
+  overflow: auto;
 }
 
 .spaceTabs { display: flex; gap: 5px; flex: 0 0 auto; margin-bottom: 11px; }
+.controls { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; min-height: 0; margin: 0; padding: 0; border: 0; }
+.workspaceActions { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; margin-bottom: 11px; }
+.workspaceActions .spaceTabs { flex: 1; min-width: 0; margin-bottom: 0; }
+.workspaceActions .newButton { flex: 0 0 auto; min-height: 28px; padding: 3px 6px; white-space: nowrap; }
+.imageButton { display: block; width: 100%; padding: 0; border: 0; color: inherit; background: transparent; cursor: zoom-in; }
+.imageButton:hover { background: #ffffff40; }
 .spaceTabs button { flex: 1; min-height: 28px; padding: 3px 5px; border: 1px solid var(--border, #35404e); border-radius: 6px; color: var(--text-secondary, #9eb0be); background: var(--surface-hover, #202a35); font: inherit; font-size: 10px; font-weight: 650; cursor: pointer; }
 .spaceTabs button:hover { border-color: var(--accent-border, #70867a); color: var(--text-primary, #ecf3eb); }
 .spaceTabs button[aria-pressed='true'] { border-color: var(--accent-border, #8daa78); color: var(--text-primary, #e6f3df); background: var(--accent-surface-hover, #35472f); }
@@ -84,7 +90,7 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  min-height: 105px;
+  min-height: 75px;
   padding: 10px;
   border: 1px solid var(--note-border);
   border-radius: 8px;
@@ -128,7 +134,7 @@
 .attachmentCaption button { display: grid; place-items: center; flex: 0 0 20px; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 3px; color: #554e43; background: transparent; cursor: pointer; }
 .attachmentCaption button:hover { background: rgba(63, 54, 43, .16); }
 
-.saveStatus { min-height: 14px; margin-top: 7px; color: var(--text-secondary, #8193a1); font-size: 9px; line-height: 1.3; }
+.saveStatus { flex: 0 0 auto; min-height: 14px; margin-top: 7px; color: var(--text-secondary, #8193a1); font-size: 9px; line-height: 1.3; }
 .message, .error { margin: 13px 0 0; color: var(--text-secondary, #95a4b2); font-size: 11px; line-height: 1.4; }
 .error { color: var(--text-error, #e9a49f); }
 .empty { display: flex; flex: 1 1 auto; flex-direction: column; align-items: center; justify-content: center; gap: 11px; color: var(--text-secondary, #9dabb7); font-size: 11px; }

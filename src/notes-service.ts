@@ -156,7 +156,9 @@ function extensionFor(mediaType: NoteAttachment['mediaType']): string {
 }
 
 /** Register a narrow, dashboard-only IPC surface for local notes. Call once after app.whenReady(). */
-export function registerNotesIpc(getDashboardWindow: () => BrowserWindow | null): void {
+export function registerNotesIpc(getDashboardWindow: () => BrowserWindow | null): {
+  readImage(noteId: unknown, attachmentId: unknown): Promise<{ name: string; source: string }>;
+} {
   const notesDir = path.join(app.getPath('userData'), 'notes');
   const notesPath = path.join(notesDir, 'notes.json');
   const attachmentDir = path.join(notesDir, 'attachments');
@@ -339,8 +341,7 @@ export function registerNotesIpc(getDashboardWindow: () => BrowserWindow | null)
     });
   });
 
-  ipcMain.handle('notes:read-attachment', (event, rawId: unknown, rawAttachmentId: unknown) => {
-    assertDashboardSender(event);
+  function readImage(rawId: unknown, rawAttachmentId: unknown): Promise<{ name: string; source: string }> {
     const id = requireId(rawId);
     const attachmentId = requireId(rawAttachmentId);
     return serialize(async () => {
@@ -351,8 +352,13 @@ export function registerNotesIpc(getDashboardWindow: () => BrowserWindow | null)
       if (bytes.length > MAX_IMAGE_BYTES || imageFormat(bytes)?.mediaType !== attachment.mediaType) {
         throw new Error('Invalid attachment data');
       }
-      return `data:${attachment.mediaType};base64,${bytes.toString('base64')}`;
+      return { name: attachment.name, source: `data:${attachment.mediaType};base64,${bytes.toString('base64')}` };
     });
+  }
+
+  ipcMain.handle('notes:read-attachment', async (event, rawId: unknown, rawAttachmentId: unknown) => {
+    assertDashboardSender(event);
+    return (await readImage(rawId, rawAttachmentId)).source;
   });
 
   ipcMain.handle('notes:remove-attachment', (event, rawId: unknown, rawAttachmentId: unknown) => {
@@ -375,4 +381,5 @@ export function registerNotesIpc(getDashboardWindow: () => BrowserWindow | null)
       });
     });
   });
+  return { readImage };
 }

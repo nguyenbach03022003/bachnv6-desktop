@@ -2,6 +2,9 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopApi, WindowState } from './shared/desktop-api';
 import type { NotePatch } from './shared/notes-types';
 import type { SystemMetricsSample } from './shared/system-metrics-types';
+import type { NotesWorkspaceState } from './shared/notes-workspace-types';
+import type { CompanionSnapshot } from './shared/companion-types';
+import type { AiSettings } from './shared/ai-settings-types';
 
 type WindowAction = 'minimize' | 'toggle-maximize' | 'toggle-always-on-top' | 'close';
 
@@ -10,6 +13,17 @@ function runWindowAction(action: WindowAction): Promise<WindowState> {
 }
 
 const desktopApi: DesktopApi = {
+  aiSettings: {
+    get: () => ipcRenderer.invoke('ai-settings:get'),
+    save: (settings) => ipcRenderer.invoke('ai-settings:save', settings),
+    check: (settings) => ipcRenderer.invoke('ai-settings:check', settings),
+    pickExecutable: () => ipcRenderer.invoke('ai-settings:pick'),
+    onChanged: (listener) => {
+      const callback = (_event: Electron.IpcRendererEvent, settings: AiSettings) => listener(settings);
+      ipcRenderer.on('ai-settings:changed', callback);
+      return () => ipcRenderer.removeListener('ai-settings:changed', callback);
+    },
+  },
   minimize: () => runWindowAction('minimize'),
   toggleMaximize: () => runWindowAction('toggle-maximize'),
   toggleAlwaysOnTop: () => runWindowAction('toggle-always-on-top'),
@@ -48,6 +62,38 @@ const desktopApi: DesktopApi = {
     removeAttachment: async (id: string, attachmentId: string) => {
       await ipcRenderer.invoke('notes:remove-attachment', id, attachmentId);
     },
+  },
+  companion: {
+    get: () => ipcRenderer.invoke('companion:get'),
+    chat: (text) => ipcRenderer.invoke('companion:chat', text),
+    cancel: () => ipcRenderer.invoke('companion:cancel'),
+    clearChat: () => ipcRenderer.invoke('companion:clear-chat'),
+    saveReport: (report) => ipcRenderer.invoke('companion:report', report),
+    labelTerminal: (id, name) => ipcRenderer.invoke('companion:label', id, name),
+    onUpdate: (listener) => {
+      const callback = (_event: Electron.IpcRendererEvent, snapshot: CompanionSnapshot) => listener(snapshot);
+      ipcRenderer.on('companion:update', callback);
+      return () => ipcRenderer.removeListener('companion:update', callback);
+    },
+  },
+  notesWorkspace: {
+    getState: () => ipcRenderer.invoke('notes-workspace:state'),
+    detach: (context) => ipcRenderer.invoke('notes-workspace:detach', context),
+    merge: () => ipcRenderer.invoke('notes-workspace:merge'),
+    focus: () => ipcRenderer.invoke('notes-workspace:focus'),
+    setContext: (context) => ipcRenderer.invoke('notes-workspace:context', context),
+    onStateChanged: (listener) => {
+      const callback = (_event: Electron.IpcRendererEvent, state: NotesWorkspaceState) => listener(state);
+      ipcRenderer.on('notes-workspace:changed', callback);
+      return () => ipcRenderer.removeListener('notes-workspace:changed', callback);
+    },
+    onMergeRequested: (listener) => {
+      const callback = () => listener();
+      ipcRenderer.on('notes-workspace:merge-requested', callback);
+      return () => ipcRenderer.removeListener('notes-workspace:merge-requested', callback);
+    },
+    openImage: (noteId, attachmentId) => ipcRenderer.invoke('notes-workspace:open-image', noteId, attachmentId),
+    getImage: () => ipcRenderer.invoke('notes-workspace:image'),
   },
   vocabulary: {
     list: () => ipcRenderer.invoke('vocabulary:list'),

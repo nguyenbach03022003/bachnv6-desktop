@@ -1,0 +1,52 @@
+.panel { position: relative; display: flex; container-type: inline-size; padding: 10px 12px; min-height: 0; overflow: hidden; background: var(--companion-background, radial-gradient(circle at 50% 44%, #253344, #161f2b 73%)); }
+.identity { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.avatar { display: flex; align-items: center; justify-content: center; flex: 0 0 40px; width: 40px; height: 40px; }
+.content { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; gap: 7px; }
+.heading { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 6px; flex: 0 0 auto; }
+.heading h2 { margin: 0; font-size: 12px; font-weight: 700; color: var(--text-primary, #eef3f6); }
+.tabs { display: flex; gap: 3px; }
+.panel button { border: 1px solid var(--border, #27303d); border-radius: 6px; padding: 5px 7px; background: var(--surface, #1a2430); color: var(--text-secondary, #aeb9c7); font-size: 10px; cursor: pointer; }
+.panel button:hover:not(:disabled), .tabs button[aria-pressed='true'] { color: var(--accent-text, #cae9b5); border-color: var(--accent-border, #567249); background: var(--accent-surface, #263627); }
+.panel button:disabled { opacity: .5; cursor: default; }
+.history { min-height: 0; flex: 1; overflow: auto; scrollbar-width: thin; }
+.empty { margin: 5px 0; color: var(--text-secondary, #aeb9c7); font-size: 12px; line-height: 1.5; }
+.message { margin-bottom: 7px; padding: 7px 9px; background: var(--surface, #1a2430); border: 1px solid var(--border, #27303d); border-radius: 8px; }
+.message[data-role='user'] { margin-left: 15px; background: var(--accent-surface, #263627); }
+.message[data-role='notice'] { color: var(--text-error, #f4cecb); }
+.message small, .report small { color: var(--text-muted, #8895a6); font-size: 9px; }
+.message p, .report p { margin: 4px 0 0; font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.latest { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; flex: 0 0 auto; }
+.compose { display: flex; align-items: flex-end; gap: 5px; flex: 0 0 auto; }
+.composeActions { display: flex; justify-content: flex-end; gap: 5px; flex: 0 0 auto; }
+.panel textarea, .panel input, .panel select { min-width: 0; border: 1px solid var(--border, #27303d); border-radius: 6px; padding: 7px; color: var(--text-primary, #eef3f6); background: var(--surface-inset, #0c121a); font: inherit; font-size: 11px; }
+.panel textarea:focus, .panel input:focus, .panel select:focus { outline: 1px solid var(--accent, #a9d878); outline-offset: 1px; }
+.compose textarea { flex: 1; height: 36px; max-height: 65px; resize: vertical; }
+.compose button { height: 36px; padding-inline: 12px; }
+.report { padding: 8px; margin-bottom: 7px; border: 1px solid var(--border, #27303d); border-radius: 8px; background: var(--surface, #1a2430); }
+.report > div { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 10px; }
+.report h3 { margin: 5px 0 0; font-size: 11px; }
+.report [data-status] { font-size: 9px; color: var(--accent-text, #cae9b5); }
+.report [data-status='failed'] { color: var(--text-error, #f4cecb); }
+.report button { margin-top: 6px; }
+.reportForm { display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; }
+.reportFields { display: flex; gap: 5px; }
+.reportFields input { flex: 1; }
+.reportFields select { width: 90px; }
+.reportForm textarea { flex: 1; min-height: 45px; resize: none; }
+.reportActions { display: flex; gap: 5px; align-items: center; }
+.reportActions span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 10px; color: var(--text-secondary, #aeb9c7); }
+.error { flex: 0 0 auto; margin: 0; font-size: 10px; color: var(--text-error, #f4cecb); line-height: 1.4; overflow-wrap: anywhere; }
+@media (max-width: 680px) { .panel { padding: 10px; } }
+@container (max-width: 280px) {
+  .heading { flex-direction: column; align-items: stretch; gap: 4px; }
+  .tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tabs button { min-height: 28px; }
+  .compose { display: grid; grid-template-columns: 1fr; }
+  .compose textarea { grid-column: 1 / -1; width: 100%; height: 60px; resize: none; }
+  .composeActions { grid-column: 1; }
+  .compose button { height: 30px; }
+  .reportFields { flex-direction: column; }
+  .reportFields select { width: 100%; }
+  .reportActions { flex-wrap: wrap; justify-content: flex-end; }
+  .reportActions span { flex-basis: 100%; }
+}

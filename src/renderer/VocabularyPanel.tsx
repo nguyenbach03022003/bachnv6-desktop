@@ -4,7 +4,7 @@ import { MorphIcon } from 'morphicons/react';
 import type { VocabularyCard } from '../shared/vocabulary-types';
 import styles from './VocabularyPanel.module.css';
 
-export function VocabularyPanel() {
+export function VocabularyPanel({ onBusyChange }: { onBusyChange?: (busy: boolean) => void }) {
   const api = window.dashboard?.vocabulary;
   const [cards, setCards] = useState<VocabularyCard[]>([]);
   const [input, setInput] = useState('');
@@ -19,6 +19,11 @@ export function VocabularyPanel() {
   const [error, setError] = useState<string | null>(null);
   const selectedIndex = Math.max(0, cards.findIndex((card) => card.id === selectedId));
   const card = cards[selectedIndex];
+
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
 
   useEffect(() => {
     if (!api) { setLoading(false); return; }

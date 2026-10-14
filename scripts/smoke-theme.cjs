@@ -26,6 +26,11 @@ if (!process.versions.electron) {
   let window;
   const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const run = (code) => window.webContents.executeJavaScript(code, true);
+  const pidCommand = (prefix) => process.platform === 'win32'
+    ? `[Console]::WriteLine('${prefix}_' + $PID)` : `printf '${prefix}_%s\\n' "$$"`;
+  const colorCommand = process.platform === 'win32'
+    ? `[Console]::WriteLine([char]27 + '[31mred ' + [char]27 + '[32mgreen ' + [char]27 + '[33myellow ' + [char]27 + '[34mblue ' + [char]27 + '[35mpurple ' + [char]27 + '[36mcyan' + [char]27 + '[0m')`
+    : `printf '\\033[31mred \\033[32mgreen \\033[33myellow \\033[34mblue \\033[35mpurple \\033[36mcyan\\033[0m\\n'`;
   async function until(code, description) {
     const deadline = Date.now() + 15_000;
     while (Date.now() < deadline) {
@@ -66,20 +71,20 @@ if (!process.versions.electron) {
       await until(`Boolean(document.querySelector('.xterm-rows') && document.querySelector('[aria-label="Switch to dark mode"]'))`, 'light mode and terminal');
       assert.equal(await run(`document.documentElement.dataset.theme`), 'light');
       assert.equal(await run(`getComputedStyle(document.documentElement).colorScheme`), 'light');
-      const firstPid = await command(`printf 'first_pid_%s\\n' "$$"`, 'first_pid_');
-      await command(`printf '\\033[31mred \\033[32mgreen \\033[33myellow \\033[34mblue \\033[35mpurple \\033[36mcyan\\033[0m\\n'`, 'red ');
+      const firstPid = await command(pidCommand('first_pid'), 'first_pid_');
+      await command(colorCommand, 'red ');
       await run(`globalThis.themeFirstTerminal = document.querySelector('.xterm'); document.querySelector('[aria-label="New terminal"]').click()`);
       await until(`document.querySelectorAll('.xterm').length === 2`, 'second terminal');
-      const secondPid = await command(`printf 'second_pid_%s\\n' "$$"`, 'second_pid_');
+      const secondPid = await command(pidCommand('second_pid'), 'second_pid_');
       await run(`document.querySelector('[aria-label="Switch to dark mode"]').click()`);
       await until(`document.documentElement.dataset.theme === 'dark'`, 'dark mode');
       assert.equal(await run(`globalThis.themeFirstTerminal === document.querySelector('.xterm')`), true);
-      assert.equal(await command(`printf 'after_pid_%s\\n' "$$"`, 'after_pid_'), secondPid.replace('second_', 'after_'));
+      assert.equal(await command(pidCommand('after_pid'), 'after_pid_'), secondPid.replace('second_', 'after_'));
       assert.equal(await run(`localStorage.getItem('desktop-theme')`), 'dark');
       await screenshot('theme-dark.png');
       await run(`document.querySelector('[aria-label="Switch to light mode"]').click(); document.querySelector('[role="tab"]').click()`);
       await until(`document.documentElement.dataset.theme === 'light'`, 'return to light mode');
-      assert.equal(await command(`printf 'return_pid_%s\\n' "$$"`, 'return_pid_'), firstPid.replace('first_', 'return_'));
+      assert.equal(await command(pidCommand('return_pid'), 'return_pid_'), firstPid.replace('first_', 'return_'));
       assert.equal(await run(`getComputedStyle(document.querySelector('[role="tabpanel"]').parentElement).backgroundColor`), 'rgb(255, 240, 223)');
       assert.equal(await run(`getComputedStyle(document.querySelector('.xterm-rows')).color`), 'rgb(66, 44, 33)');
       const colors = await run(`(() => {

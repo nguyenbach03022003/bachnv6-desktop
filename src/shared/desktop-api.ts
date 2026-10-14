@@ -4,6 +4,9 @@ import type { WeatherLocation, WeatherSnapshot } from './weather-types';
 import type { CodexResetResult, CodexUsageSnapshot } from './codex-usage-types';
 import type { TranslationApi } from './translation-types';
 import type { VocabularyApi } from './vocabulary-types';
+import type { NotesWorkspaceApi } from './notes-workspace-types';
+import type { CompanionApi } from './companion-types';
+import type { AiSettingsApi } from './ai-settings-types';
 
 export interface WindowState {
   maximized: boolean;
@@ -11,13 +14,14 @@ export interface WindowState {
 }
 
 export interface DesktopApi {
+  aiSettings: AiSettingsApi;
   minimize(): Promise<WindowState>;
   toggleMaximize(): Promise<WindowState>;
   toggleAlwaysOnTop(): Promise<WindowState>;
   close(): Promise<void>;
   getWindowState(): Promise<WindowState>;
   onWindowStateChanged(listener: (state: WindowState) => void): () => void;
-  createTerminal(cols: number, rows: number): Promise<{ id: string; shell: string; cwd: string }>;
+  createTerminal(cols: number, rows: number): Promise<{ id: string; shell: string; cwd: string; reportFile?: string }>;
   writeTerminal(id: string, data: string): Promise<void>;
   resizeTerminal(id: string, cols: number, rows: number): Promise<void>;
   closeTerminal(id: string): Promise<void>;
@@ -26,6 +30,8 @@ export interface DesktopApi {
   readTerminalClipboard(): Promise<string>;
   writeTerminalClipboard(text: string): Promise<void>;
   notes: NotesApi;
+  companion: CompanionApi;
+  notesWorkspace: NotesWorkspaceApi;
   vocabulary: VocabularyApi;
   metrics: {
     start(): Promise<SystemMetricsSample>;

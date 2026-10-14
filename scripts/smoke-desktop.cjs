@@ -110,33 +110,25 @@ if (!process.versions.electron) {
       window.focus();
       await until(`Boolean(window.dashboard?.translation && document.querySelector('.xterm-rows'))`, 'dashboard and terminal');
       await until(`Boolean(document.querySelector('[aria-label="Desk companion"] button[aria-label="Boop the fox"]'))`, 'companion tile');
-      const companion = await run(`(() => {
-        const tile = document.querySelector('[aria-label="Desk companion"]');
-        const cpu = [...document.querySelectorAll('article')].find(item => item.textContent.includes('CPU'));
-        const tileBox = tile.getBoundingClientRect();
-        const cpuBox = cpu.getBoundingClientRect();
-        return { square: Math.abs(tileBox.width - tileBox.height) < 2, leftOfCpu: tileBox.right < cpuBox.left };
-      })()`);
-      assert(companion.square && companion.leftOfCpu);
       assert.equal(BrowserWindow.getAllWindows().length, 1);
-      if (process.env.DESKTOP_SMOKE_STAGE === 'create') {
-        window.setSize(1024, 800);
+      for (const width of [1024, 1320]) {
+        window.setSize(width, 800);
         await pause(180);
-        const compact = await run(`(() => {
-          const cards = [...document.querySelectorAll('[aria-label="Live system metrics and desk companion"] > article')].map(item => item.getBoundingClientRect());
-          return { square: Math.abs(cards[0].width - cards[0].height) < 2,
-            cpuBeside: cards[1].left > cards[0].right && Math.abs(cards[1].top - cards[0].top) < 2,
-            memoryBelow: cards[2].top >= cards[0].bottom && cards[2].width > cards[0].width,
-            networkBesideMemory: cards[3].left > cards[2].right && Math.abs(cards[3].top - cards[2].top) < 2 };
+        const layout = await run(`(() => {
+          const system = document.querySelector('[aria-label="Live system metrics"]');
+          const fox = document.querySelector('[aria-label="Desk companion"]');
+          const a = system.getBoundingClientRect(), b = fox.getBoundingClientRect();
+          return { combined: system.querySelectorAll('[aria-label$="metric"]').length === 3,
+            leftOfTerminal: b.right <= a.left,
+            belowWeather: b.top >= document.querySelector('[aria-label="Weather"]').getBoundingClientRect().bottom,
+            chat: Boolean(fox.querySelector('[aria-label="Message the fox"]')) };
         })()`);
-        assert(Object.values(compact).every(Boolean), JSON.stringify(compact));
-        fs.writeFileSync(path.join(output, 'dashboard-compact.png'), (await window.webContents.capturePage()).toPNG());
-        window.setSize(1320, 800);
-        await pause(180);
+        assert(Object.values(layout).every(Boolean), JSON.stringify(layout));
+        if (width === 1024) fs.writeFileSync(path.join(output, 'dashboard-compact.png'), (await window.webContents.capturePage()).toPNG());
       }
-      await run(`document.querySelector('[aria-label="Desk companion"]').click()`);
+      await run(`document.querySelector('button[aria-label="Boop the fox"]').click()`);
       await until(`document.querySelector('button[aria-label="Boop the fox"] > span > span:last-child')?.style.opacity === '1'`, 'companion click reaction');
-      check('Square desk companion beside CPU reacts to clicks');
+      check('Horizontal system metrics above terminal; fox chat below weather reacts to clicks');
       assert.equal(await run(`'gold' in window.dashboard`), false);
       check('Gold feature removed from preload');
       const usage = await run(`window.dashboard.usage.get()`);

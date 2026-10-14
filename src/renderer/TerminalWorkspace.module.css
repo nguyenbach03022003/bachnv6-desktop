@@ -34,6 +34,9 @@
 
 .tabScroller { display: flex; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
 .tabGroup { display: flex; align-items: stretch; flex: 0 0 auto; position: relative; }
+.tabGroup[data-drop-side]::before { content: ''; position: absolute; top: 5px; bottom: 5px; width: 3px; background: var(--accent, #ed853d); border-radius: 2px; z-index: 2; pointer-events: none; }
+.tabGroup[data-drop-side='before']::before { left: 0; }
+.tabGroup[data-drop-side='after']::before { right: 0; }
 .tabGroup > button:first-child {
   display: inline-flex;
   align-items: center;
@@ -90,7 +93,7 @@
 .stateOverlay button, .emptyState button { padding: 6px 10px; border: 1px solid var(--accent-border, #5d7652); border-radius: 6px; color: var(--accent-text, #d3e7c3); background: var(--accent-surface, #263928); font-size: 11px; cursor: pointer; }
 .stateOverlay button:hover, .emptyState button:hover { background: var(--accent-surface-hover, #344b32); }
 
-.toolbar { display: flex; align-items: center; justify-content: space-between; gap: 9px; flex: 0 0 38px; min-width: 0; padding: 0 12px 0 17px; border-top: 1px solid var(--border, #2b3540); background: var(--surface, #111a22); }
+.toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 9px; flex: 0 0 auto; min-height: 38px; min-width: 0; padding: 4px 12px 4px 17px; border-top: 1px solid var(--border, #2b3540); background: var(--surface, #111a22); }
 .status { min-width: 0; overflow: hidden; color: var(--text-secondary, #8d9fac); font-family: var(--mono); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .actions { display: flex; align-items: center; gap: 3px; flex: 0 0 auto; }
 .actions button { min-height: 27px; padding: 0 7px; border: 0; border-radius: 5px; color: var(--text-secondary, #a5b4bf); background: transparent; font-size: 10px; cursor: pointer; }
@@ -101,9 +104,22 @@
 .selectionHint kbd { font: inherit; font-weight: 650; color: var(--accent-text, #d7e9c9); }
 .clipboardError { position: absolute; z-index: 2; right: 12px; bottom: 45px; display: flex; align-items: center; gap: 8px; max-width: min(340px, calc(100% - 24px)); padding: 8px 9px; border: 1px solid var(--accent-border, #8a4a47); border-radius: 6px; color: var(--text-error, #f4cecb); background: var(--error-surface, #382022); font-size: 10px; line-height: 1.4; }
 .clipboardError button { flex: 0 0 auto; border: 0; color: inherit; background: transparent; font-size: 16px; cursor: pointer; }
+.reportHelp { position: absolute; z-index: 3; bottom: 48px; left: 12px; right: 12px; max-height: 230px; overflow: auto; padding: 12px; border: 1px solid var(--accent-border, #567249); border-radius: 8px; background: var(--surface, #1a2430); color: var(--text-secondary, #aeb9c7); font-size: 11px; line-height: 1.5; box-shadow: var(--panel-shadow, 0 8px 28px #0006); }
+.reportHelp p { margin: 0 0 7px; overflow-wrap: anywhere; }
+.reportHelp code { display: block; margin-bottom: 7px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reportHelp button { padding: 5px 8px; border: 1px solid var(--accent-border, #567249); border-radius: 5px; background: var(--accent-surface, #263627); color: var(--accent-text, #cae9b5); cursor: pointer; font-size: 10px; }
 
 .emptyState { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 11px; flex: 1 1 auto; color: var(--text-secondary, #8da1ad); }
 .emptyState p { margin: 0; font-size: 12px; }
+
+.closeDialog { max-width: 390px; width: calc(100% - 40px); padding: 22px; border: 1px solid var(--border, #27303d); border-radius: 12px; color: var(--text-primary, #eef3f6); background: var(--surface, #1a2430); box-shadow: 0 16px 60px #0005; }
+.closeDialog::backdrop { background: #0007; }
+.closeDialog h3 { margin: 0 0 10px; font-size: 16px; overflow-wrap: anywhere; }
+.closeDialog p { margin: 0; color: var(--text-secondary, #aeb9c7); font-size: 12px; line-height: 1.6; }
+.dialogActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.dialogActions button { padding: 8px 12px; border: 1px solid var(--border, #27303d); border-radius: 6px; color: var(--text-primary, #eef3f6); background: var(--surface-inset, #0c121a); font-size: 12px; cursor: pointer; }
+.dialogActions .confirmClose { color: var(--text-error, #f4cecb); background: var(--error-surface, #382022); }
+.dialogActions button:focus-visible { outline: 2px solid var(--accent, #ed853d); outline-offset: 2px; }
 
 @media (max-width: 540px) {
   .surface { padding-inline: 10px; }

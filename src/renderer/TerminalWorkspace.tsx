@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import { Terminal as Xterm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { Arc } from 'loading-dev';
@@ -8,11 +8,15 @@ import '@xterm/xterm/css/xterm.css';
 import styles from './TerminalWorkspace.module.css';
 import { terminalThemes, type AppTheme } from './theme';
 import { isTranslateSelectionShortcut, TRANSLATE_SELECTION_ARIA_SHORTCUT, TRANSLATE_SELECTION_SHORTCUT } from './translation-shortcut';
+import { OPEN_TERMINAL_EVENT, REPORT_DRAFT_EVENT } from './companion-events';
+import { createEngine, REPLACE, PASSTHROUGH, type VietTelexEngine, type TypingAction } from '@viettelex/core';
+import { useInputLanguage } from './InputLanguage';
 
 interface TerminalSession {
   id: string;
   shell: string;
   cwd: string;
+  reportFile?: string;
 }
 
 interface TerminalBridge {
@@ -76,10 +80,19 @@ function TerminalPane({
   tabId: string;
   onRestart: () => void;
   autoTranslate: boolean;
-  onTranslateSelection: (text: string) => Promise<void>;
+  onTranslateSelection?: (text: string) => Promise<void>;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Xterm | null>(null);
+  const typingEngineRef = useRef<VietTelexEngine | null>(null);
+  const { language } = useInputLanguage();
+  const languageRef = useRef(language);
+  languageRef.current = language;
+  const sessionRef = useRef<TerminalSession | null>(null);
+  const nameRef = useRef(tab.name);
+  nameRef.current = tab.name;
+  const [reportHelp, setReportHelp] = useState(false);
+  const [reportFile, setReportFile] = useState<string | null>(null);
   const themeRef = useRef(theme);
   themeRef.current = theme;
   const [state, setState] = useState<SessionState>(bridge ? { kind: 'connecting' } : { kind: 'unavailable' });
@@ -100,6 +113,7 @@ function TerminalPane({
     let lastSize = '';
     let writeQueue: Promise<void> = Promise.resolve();
     let selectionTimer: number | undefined;
+    let telexHandled = false;
     const earlyData = new Map<string, string>();
     const earlyExits = new Map<string, number>();
     const terminal = new Xterm({
@@ -118,6 +132,9 @@ function TerminalPane({
     terminal.loadAddon(fit);
     terminal.open(host);
     terminalRef.current = terminal;
+    void createEngine({ inputMethod: 'telex', modernTone: true }).then(engine => {
+      if (disposed) engine.destroy(); else typingEngineRef.current = engine;
+    }).catch(reason => console.error('Could not load terminal typing', reason));
     const modeSubscription = terminal.onWriteParsed(() => {
       if (!disposed) setMouseReporting(terminal.modes.mouseTrackingMode !== 'none');
     });
@@ -162,7 +179,7 @@ function TerminalPane({
         earlyExits.set(id, exitCode);
       }
     });
-    const inputSubscription = terminal.onData((data: string) => {
+    function writeInput(data: string) {
       if (!disposed && sessionId) {
         const id = sessionId;
         // IPC bounds each write to 64 KiB. Serialize smaller chunks so a large
@@ -172,7 +189,7 @@ function TerminalPane({
             let end = Math.min(offset + 16384, data.length);
             if (end < data.length && data.charCodeAt(end - 1) >= 0xd800 && data.charCodeAt(end - 1) <= 0xdbff
               && data.charCodeAt(end) >= 0xdc00 && data.charCodeAt(end) <= 0xdfff) end--;
-            await bridge.writeTerminal(id, data.slice(offset, end));
+            await bridge!.writeTerminal(id, data.slice(offset, end));
             offset = end;
           }
         }).catch((error: unknown) => {
@@ -181,7 +198,15 @@ function TerminalPane({
           setState({ kind: 'error', message: `Terminal input failed: ${errorMessage(error)}` });
         });
       }
-    });
+    }
+    const inputSubscription = terminal.onData(writeInput);
+    function applyTyping(action: TypingAction) {
+      if (action.kind === REPLACE) writeInput('\x7f'.repeat(action.backspaces) + action.insert);
+    }
+    const resetTyping = () => typingEngineRef.current?.resetContext();
+    host.addEventListener('mousedown', resetTyping);
+    terminal.textarea?.addEventListener('blur', resetTyping);
+    terminal.textarea?.addEventListener('compositionstart', resetTyping);
     const selectionSubscription = terminal.onSelectionChange(() => {
       setHasSelection(terminal.hasSelection());
       window.clearTimeout(selectionTimer);
@@ -190,13 +215,13 @@ function TerminalPane({
       selectionTimer = window.setTimeout(() => {
         const current = translationRef.current;
         if (!disposed && current.active && current.autoTranslate && terminal.hasSelection()) {
-          void current.onTranslateSelection(terminal.getSelection());
+          void current.onTranslateSelection?.(terminal.getSelection());
         }
       }, 650);
     });
     function translateSelectionShortcut(event: globalThis.KeyboardEvent): void {
       const current = translationRef.current;
-      if (disposed || !current.active || !isTranslateSelectionShortcut(event)) return;
+      if (disposed || !current.active || !current.onTranslateSelection || !isTranslateSelectionShortcut(event)) return;
       const text = terminal.getSelection();
       // Ctrl+T keeps its usual shell/input behavior when nothing is selected.
       if (!text.trim()) return;
@@ -212,6 +237,36 @@ function TerminalPane({
     const shortcutEvents = ['keydown', 'keypress', 'keyup'] as const;
     for (const type of shortcutEvents) window.addEventListener(type, translateSelectionShortcut, true);
     terminal.attachCustomKeyEventHandler((event: globalThis.KeyboardEvent) => {
+      if (event.type === 'keypress' && telexHandled) { event.preventDefault(); return false; }
+      if (event.type === 'keyup') telexHandled = false;
+      if (event.type === 'keydown') telexHandled = false;
+      // The global input-language handler owns the modifier chord; do not
+      // turn its modifier presses into shell input.
+      if (!event.altKey && !event.metaKey && (event.key === 'Shift' || event.key === 'Control')
+        && event.ctrlKey && event.shiftKey) return false;
+      // Let xterm's composition helper handle IME/AltGr input before shortcuts.
+      if (event.isComposing || event.keyCode === 229 || event.getModifierState('AltGraph')) { resetTyping(); return true; }
+      const engine = typingEngineRef.current;
+      if (event.type === 'keydown' && languageRef.current === 'vi' && engine && !terminal.options.disableStdin) {
+        if (event.ctrlKey || event.altKey || event.metaKey) engine.reset();
+        else if (/^[A-Za-z]$/.test(event.key)) {
+          const action = engine.feed(event.key);
+          if (action.kind === PASSTHROUGH) writeInput(event.key); else applyTyping(action);
+          event.preventDefault();
+          telexHandled = true;
+          return false;
+        } else if (event.key === 'Backspace') {
+          const action = engine.backspace();
+          if (action.kind !== PASSTHROUGH) {
+            applyTyping(action);
+            event.preventDefault();
+            telexHandled = true;
+            return false;
+          }
+        } else if (event.key === 'Enter' || event.key === 'Tab' || event.key.length === 1 && event.key.charCodeAt(0) < 128) {
+          applyTyping(engine.commitBoundary());
+        } else engine.reset();
+      }
       if (event.type !== 'keydown' || !(event.ctrlKey || event.metaKey)) return true;
       const key = event.key.toLowerCase();
       if (key === 'c' && (event.shiftKey || terminal.hasSelection())) {
@@ -249,6 +304,9 @@ function TerminalPane({
           return;
         }
         sessionId = session.id;
+        sessionRef.current = session;
+        setReportFile(session.reportFile ?? null);
+        void window.dashboard?.companion.labelTerminal(session.id, nameRef.current).catch(() => undefined);
         creating = false;
         const output = earlyData.get(session.id);
         if (output) terminal.write(output);
@@ -284,12 +342,36 @@ function TerminalPane({
       inputSubscription.dispose();
       selectionSubscription.dispose();
       modeSubscription.dispose();
+      host.removeEventListener('mousedown', resetTyping);
+      terminal.textarea?.removeEventListener('blur', resetTyping);
+      terminal.textarea?.removeEventListener('compositionstart', resetTyping);
+      typingEngineRef.current?.destroy();
+      typingEngineRef.current = null;
       for (const type of shortcutEvents) window.removeEventListener(type, translateSelectionShortcut, true);
       terminalRef.current = null;
+      sessionRef.current = null;
       terminal.dispose();
       if (sessionId) void bridge.closeTerminal(sessionId).catch(() => undefined);
     };
   }, [bridge]);
+
+  useEffect(() => { typingEngineRef.current?.resetContext(); }, [language, active]);
+
+  useEffect(() => {
+    const session = sessionRef.current;
+    if (session) void window.dashboard?.companion.labelTerminal(session.id, tab.name).catch(() => undefined);
+  }, [tab.name]);
+  useEffect(() => {
+    function open(event: Event) {
+      if ((event as CustomEvent<string>).detail === sessionRef.current?.id) {
+        event.preventDefault();
+        document.getElementById(tabId)?.click();
+        requestAnimationFrame(() => terminalRef.current?.focus());
+      }
+    }
+    window.addEventListener(OPEN_TERMINAL_EVENT, open);
+    return () => window.removeEventListener(OPEN_TERMINAL_EVENT, open);
+  }, [tabId]);
 
   useEffect(() => {
     if (terminalRef.current) terminalRef.current.options.theme = terminalThemes[theme];
@@ -352,16 +434,29 @@ function TerminalPane({
       <div className={styles.toolbar}>
         <span className={styles.status} title={statusLabel} aria-live="polite">{statusLabel}</span>
         <div className={styles.actions}>
-          <button type="button" onMouseDown={(event) => event.preventDefault()}
+          <button type="button" disabled={!sessionRef.current || !window.dashboard?.companion}
+            title="Leave a progress report for the fox; selected output is included"
+            onClick={() => window.dispatchEvent(new CustomEvent(REPORT_DRAFT_EVENT, { detail: {
+              sessionId: sessionRef.current!.id, source: tab.name, message: (terminalRef.current?.getSelection() ?? '').slice(0, 8000),
+            } }))}>Save report</button>
+          <button type="button" disabled={!reportFile} aria-expanded={reportHelp} onClick={() => setReportHelp(!reportHelp)}>Connect reports</button>
+          {onTranslateSelection && <button type="button" onMouseDown={(event) => event.preventDefault()}
             onClick={() => { const text = terminalRef.current?.getSelection(); if (text) void onTranslateSelection(text); }}
             disabled={!hasSelection} aria-keyshortcuts={TRANSLATE_SELECTION_ARIA_SHORTCUT}
-            title={`Translate selected text (${TRANSLATE_SELECTION_SHORTCUT})`}>Translate</button>
+            title={`Translate selected text (${TRANSLATE_SELECTION_SHORTCUT})`}>Translate</button>}
           <button type="button" onClick={() => { void copySelection(); }} disabled={!hasSelection} title="Copy selection (Ctrl+Shift+C)">Copy</button>
           <button type="button" onClick={() => { void pasteClipboard(); }} disabled={state.kind !== 'ready'} title="Paste clipboard (Ctrl+Shift+V)">Paste</button>
           <button type="button" onClick={() => terminalRef.current?.clear()} disabled={!terminalRef.current} title="Clear terminal display">Clear</button>
           <button type="button" onClick={onRestart} aria-label={`Restart ${tab.name}`} title={`Restart ${tab.name}`}><MorphIcon icon={RotateCcw} size={13} reducedMotion="user" aria-hidden="true" /></button>
         </div>
       </div>
+      {reportHelp && <div className={styles.reportHelp}>
+          <p>Give this instruction to Claude or Codex in this terminal:</p>
+        <p>After each milestone, overwrite the UTF-8 JSON file at DESK_COMPANION_REPORT with task, message, and status (working, waiting, completed, or failed). Use the environment variable for the path.</p>
+        <code>{'{"task":"Fix login","message":"Tests passed","status":"completed"}'}</code>
+        <p>Report file: {reportFile}</p>
+        <button type="button" onClick={() => { void bridge?.writeTerminalClipboard('After each milestone, overwrite the UTF-8 JSON file at the path in the DESK_COMPANION_REPORT environment variable with an object containing task, message, and status (working, waiting, completed, or failed). Keep reports concise.').catch((reason) => setClipboardError(errorMessage(reason))); }}>Copy instruction</button>
+      </div>}
       {mouseReporting && <div id={`${panelId}-selection-hint`} className={styles.selectionHint} role="status">
         Hold <kbd>Shift</kbd> and drag to select text. Release Shift, then press <kbd>{TRANSLATE_SELECTION_SHORTCUT}</kbd> to translate.
       </div>}
@@ -370,10 +465,10 @@ function TerminalPane({
   );
 }
 
-export function TerminalWorkspace({ theme, autoTranslate, onTranslateSelection }: {
+export function TerminalWorkspace({ theme, autoTranslate = false, onTranslateSelection }: {
   theme: AppTheme;
-  autoTranslate: boolean;
-  onTranslateSelection: (text: string) => Promise<void>;
+  autoTranslate?: boolean;
+  onTranslateSelection?: (text: string) => Promise<void>;
 }) {
   const idPrefix = useId().replace(/:/g, '');
   const nextTabId = useRef(2);
@@ -383,7 +478,50 @@ export function TerminalWorkspace({ theme, autoTranslate, onTranslateSelection }
   const [renaming, setRenaming] = useState<{ id: number; value: string } | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const renameIdRef = useRef<number | null>(null);
+  const draggedIdRef = useRef<number | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: number; side: 'before' | 'after' } | null>(null);
+  const [pendingCloseId, setPendingCloseId] = useState<number | null>(null);
+  const closeDialogRef = useRef<HTMLDialogElement>(null);
+  const cancelCloseRef = useRef<HTMLButtonElement>(null);
+  const pendingClose = tabs.find(tab => tab.id === pendingCloseId);
   const bridge = getBridge();
+
+  useEffect(() => {
+    const dialog = closeDialogRef.current;
+    if (!dialog) return;
+    if (pendingCloseId !== null) {
+      if (!dialog.open) dialog.showModal();
+      cancelCloseRef.current?.focus();
+    } else if (dialog.open) dialog.close();
+  }, [pendingCloseId]);
+
+  function cancelClose() {
+    const id = pendingCloseId;
+    setPendingCloseId(null);
+    requestAnimationFrame(() => document.getElementById(`${idPrefix}-close-${id}`)?.focus());
+  }
+
+  function moveTab(sourceId: number, targetId: number, side: 'before' | 'after') {
+    if (sourceId === targetId) return;
+    setTabs(current => {
+      const source = current.find(tab => tab.id === sourceId);
+      if (!source || !current.some(tab => tab.id === targetId)) return current;
+      const reordered = current.filter(tab => tab.id !== sourceId);
+      const index = reordered.findIndex(tab => tab.id === targetId);
+      reordered.splice(index + (side === 'after' ? 1 : 0), 0, source);
+      return reordered;
+    });
+  }
+
+  function tabDropSide(event: DragEvent<HTMLDivElement>): 'before' | 'after' {
+    const box = event.currentTarget.getBoundingClientRect();
+    return event.clientX < box.left + box.width / 2 ? 'before' : 'after';
+  }
+
+  function endDrag() {
+    draggedIdRef.current = null;
+    setDropTarget(null);
+  }
 
   useEffect(() => {
     if (renaming) {
@@ -440,6 +578,17 @@ export function TerminalWorkspace({ theme, autoTranslate, onTranslateSelection }
   }
 
   function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (event.nativeEvent.isComposing) return;
+    if (event.altKey && !event.ctrlKey && !event.shiftKey && !event.metaKey
+      && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      event.preventDefault();
+      const source = tabs[index];
+      const target = tabs[index + (event.key === 'ArrowLeft' ? -1 : 1)];
+      if (target) moveTab(source.id, target.id, event.key === 'ArrowLeft' ? 'before' : 'after');
+      requestAnimationFrame(() => document.getElementById(`${idPrefix}-tab-${source.id}`)?.focus());
+      return;
+    }
+    if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return;
     if (event.key === 'F2') {
       event.preventDefault();
       beginRename(tabs[index]);
@@ -467,9 +616,40 @@ export function TerminalWorkspace({ theme, autoTranslate, onTranslateSelection }
         <span className={styles.liveTag}>{bridge ? 'Live shell' : 'Desktop only'}</span>
       </div>
       <div className={styles.tabs} role="tablist" aria-label="Terminal tabs">
-        <div className={styles.tabScroller}>
+        <div className={styles.tabScroller}
+          onDragOver={event => {
+            if (draggedIdRef.current === null) return;
+            event.preventDefault();
+            const box = event.currentTarget.getBoundingClientRect();
+            if (event.clientX < box.left + 28) event.currentTarget.scrollLeft -= 18;
+            else if (event.clientX > box.right - 28) event.currentTarget.scrollLeft += 18;
+          }}
+          onDrop={event => {
+            if (draggedIdRef.current === null) return;
+            event.preventDefault();
+            const last = tabs.at(-1);
+            if (last) moveTab(draggedIdRef.current, last.id, 'after');
+            endDrag();
+          }}>
           {tabs.map((tab, index) => (
-            <div className={styles.tabGroup} role="presentation" key={tab.id}>
+            <div className={styles.tabGroup} role="presentation" key={tab.id}
+              data-drop-side={dropTarget?.id === tab.id ? dropTarget.side : undefined}
+              onDragOver={event => {
+                if (draggedIdRef.current === null || draggedIdRef.current === tab.id) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                setDropTarget({ id: tab.id, side: tabDropSide(event) });
+              }}
+              onDragLeave={event => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget(null);
+              }}
+              onDrop={event => {
+                if (draggedIdRef.current === null) return;
+                event.preventDefault();
+                event.stopPropagation();
+                moveTab(draggedIdRef.current, tab.id, tabDropSide(event));
+                endDrag();
+              }}>
               <button
                 type="button"
                 id={`${idPrefix}-tab-${tab.id}`}
@@ -477,7 +657,16 @@ export function TerminalWorkspace({ theme, autoTranslate, onTranslateSelection }
                 aria-selected={activeId === tab.id}
                 aria-controls={`${idPrefix}-panel-${tab.id}`}
                 aria-label={tab.name}
-                title={`${tab.name} — double-click or press F2 to rename`}
+                title={`${tab.name} — drag to reorder; double-click or press F2 to rename`}
+                aria-describedby={`${idPrefix}-tab-help`}
+                aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+                draggable={renaming === null}
+                onDragStart={event => {
+                  draggedIdRef.current = tab.id;
+                  event.dataTransfer.effectAllowed = 'move';
+                  event.dataTransfer.setData('application/x-bachnv6-terminal-tab', String(tab.id));
+                }}
+                onDragEnd={endDrag}
                 tabIndex={activeId === tab.id ? 0 : -1}
                 onClick={() => { setActiveId(tab.id); setFocusId(tab.id); }}
                 onDoubleClick={() => beginRename(tab)}
@@ -505,12 +694,13 @@ export function TerminalWorkspace({ theme, autoTranslate, onTranslateSelection }
                 aria-label={`Rename ${tab.name}`} title={`Rename ${tab.name}`} onClick={() => beginRename(tab)}>
                 <MorphIcon icon={Pencil} size={12} reducedMotion="user" aria-hidden="true" />
               </button>}
-              <button type="button" className={styles.closeTab} aria-label={`Close ${tab.name}`} title={`Close ${tab.name}`} onClick={() => closeTab(tab.id)}><MorphIcon icon={X} size={13} reducedMotion="user" aria-hidden="true" /></button>
+              <button id={`${idPrefix}-close-${tab.id}`} type="button" className={styles.closeTab} aria-label={`Close ${tab.name}`} title={`Close ${tab.name}`} onClick={() => setPendingCloseId(tab.id)}><MorphIcon icon={X} size={13} reducedMotion="user" aria-hidden="true" /></button>
             </div>
           ))}
         </div>
         <button type="button" className={styles.addTab} aria-label="New terminal" title="New terminal" onClick={addTab}><MorphIcon icon={Plus} size={16} reducedMotion="user" aria-hidden="true" /></button>
       </div>
+      <span id={`${idPrefix}-tab-help`} className={styles.visuallyHidden}>Drag to reorder tabs, or use Alt and the left or right arrow. Press F2 to rename.</span>
       <div className={styles.panes}>
         {tabs.length === 0 ? (
           <div className={styles.emptyState}><MorphIcon icon={TerminalIcon} size={22} reducedMotion="user" aria-hidden="true" /><p>No terminal sessions</p><button type="button" onClick={addTab}>Open a terminal</button></div>
@@ -520,7 +710,7 @@ export function TerminalWorkspace({ theme, autoTranslate, onTranslateSelection }
             key={`${tab.id}-${tab.generation}`}
             tab={tab}
             active={activeId === tab.id}
-            shouldFocus={focusId === tab.id}
+            shouldFocus={pendingCloseId === null && focusId === tab.id}
             bridge={bridge}
             tabId={`${idPrefix}-tab-${tab.id}`}
             panelId={`${idPrefix}-panel-${tab.id}`}
@@ -530,6 +720,18 @@ export function TerminalWorkspace({ theme, autoTranslate, onTranslateSelection }
           />
         ))}
       </div>
+      <dialog ref={closeDialogRef} className={styles.closeDialog} aria-labelledby={`${idPrefix}-close-title`}
+        aria-describedby={`${idPrefix}-close-description`} onCancel={event => { event.preventDefault(); cancelClose(); }}>
+        <h3 id={`${idPrefix}-close-title`}>Close {pendingClose?.name}?</h3>
+        <p id={`${idPrefix}-close-description`}>This will stop the terminal session and any commands running in it.</p>
+        <div className={styles.dialogActions}>
+          <button ref={cancelCloseRef} type="button" onClick={cancelClose}>Cancel</button>
+          <button type="button" className={styles.confirmClose} onClick={() => {
+            if (pendingCloseId !== null) closeTab(pendingCloseId);
+            setPendingCloseId(null);
+          }}>Close terminal</button>
+        </div>
+      </dialog>
     </div>
   );
 }
