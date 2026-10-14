@@ -40,6 +40,9 @@ if (!process.versions.electron) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'bachnv6-ai-settings-'));
   const fixtures = path.join(profile, 'cli tools & (test)');
   fs.mkdirSync(fixtures);
+  const claudeConfig = path.join(profile, 'claude-config');
+  fs.mkdirSync(claudeConfig);
+  fs.writeFileSync(path.join(claudeConfig, '.credentials.json'), JSON.stringify({ claudeAiOauth: { accessToken: 'offline-claude-usage-token', subscriptionType: 'max' } }));
   const fixture = path.join(fixtures, 'fake-cli.cjs');
   fs.writeFileSync(fixture, `
     const fs = require('node:fs');
@@ -113,6 +116,7 @@ if (!process.versions.electron) {
         ...(process.env.DESKTOP_SMOKE_NO_SANDBOX === '1' ? ['--no-sandbox'] : []), __filename,
       ], { cwd: root, stdio: 'inherit', windowsHide: true, timeout: 120000,
         env: { ...process.env, AI_TEST_PROFILE: profile, AI_TEST_STAGE: stage, AI_TEST_LOG: path.join(profile, 'calls.jsonl'),
+          CLAUDE_CONFIG_DIR: claudeConfig, CLAUDE_CODE_OAUTH_TOKEN: undefined,
           PATH: [fixtures, process.env.PATH || process.env.Path || ''].join(path.delimiter), ELECTRON_RUN_AS_NODE: undefined } });
       assert.equal(result.status, 0, `${stage}: ${result.error?.message || result.signal || result.status}`);
     }
@@ -128,6 +132,25 @@ if (!process.versions.electron) {
   assert(profile && path.dirname(profile) === os.tmpdir() && path.basename(profile).startsWith('bachnv6-ai-settings-'));
   app.setPath('userData', profile);
   app.commandLine.appendSwitch('disable-gpu');
+  // Mock only the fixed subscription endpoint; never read or send real credentials.
+  const https = require('node:https');
+  const originalGet = https.get;
+  let usageReads = 0;
+  https.get = function (url, options, callback) {
+    if (String(url) !== 'https://api.anthropic.com/api/oauth/usage') return originalGet.apply(this, arguments);
+    assert.equal(options.headers.Authorization, 'Bearer offline-claude-usage-token');
+    usageReads++;
+    const request = new (require('node:events').EventEmitter)();
+    request.destroy = () => request.emit('error', new Error('Request stopped'));
+    process.nextTick(() => {
+      const response = new (require('node:stream').PassThrough)();
+      response.statusCode = 200; response.headers = {};
+      callback(response);
+      response.end(JSON.stringify({ five_hour: { utilization: 23, resets_at: new Date(Date.now() + 7200000).toISOString() },
+        seven_day: { utilization: 67, resets_at: new Date(Date.now() + 172800000).toISOString() } }));
+    });
+    return request;
+  };
   require(path.join(root, '.vite', 'build', 'main.js'));
   let window;
   const run = code => window.webContents.executeJavaScript(code, true);
@@ -216,14 +239,22 @@ if (!process.versions.electron) {
         }
         const before = calls().length;
         const usage = await run('window.dashboard.usage.refresh()');
-        assert.equal(usage.status, 'unavailable');
-        assert.equal(usage.windows.length, 0);
+        assert.equal(usage.status, 'live');
+        assert.equal(usage.provider, 'claude');
+        assert.deepEqual(usage.windows.map(item => item.usedPercent), [23, 67]);
+        assert(usage.windows.every(item => item.resetsAt > Date.now() / 1000));
+        assert.equal(usage.creditBalance, null);
+        assert.equal(usage.resetBank, null);
+        assert(!JSON.stringify(usage).includes('offline-claude-usage-token'));
+        await until(`Boolean(document.querySelector('[aria-label="Claude CLI usage"] [aria-label="5-hour limit: 23 percent used"]') && document.querySelector('[aria-label="Weekly limit: 67 percent used"]'))`, 'Claude usage UI');
+        assert.equal(await run(`Boolean(document.querySelector('[aria-label="Codex credits and reset bank"]'))`), false);
+        assert(usageReads >= 1);
         await assert.rejects(run('window.dashboard.usage.useReset(null)'), /only with Codex/);
         assert.equal(calls().length, before);
         const missing = await run(`window.dashboard.aiSettings.check(${JSON.stringify({ ...configured, claude: { executable: path.join(profile, 'missing' + (process.platform === 'win32' ? '.exe' : '')), model: '' } })})`);
         assert.equal(missing.ok, false);
         assert.match(missing.error, /configured path/);
-        console.log('PASS Claude mode never launches Codex for usage or resets; missing CLI has an actionable error');
+        console.log('PASS Claude 5-hour and weekly usage, reset times, provider isolation, and protected credentials; missing CLI has an actionable error');
 
         const rename = fs.promises.rename;
         fs.promises.rename = async (from, to) => { if (to === path.join(profile, 'ai-settings.json')) throw new Error('Simulated save failure'); return rename(from, to); };
@@ -235,6 +266,7 @@ if (!process.versions.electron) {
 
         await run(`document.querySelector('[aria-label="Switch to dark mode"]')?.click()`);
         await until(`document.documentElement.dataset.theme === 'dark'`, 'dark theme');
+        await capture('claude-usage-dark.png');
         await run(`document.querySelector('[aria-label="App settings"]').click()`);
         await until(`document.querySelector('dialog[open] #ai-provider')?.value === 'claude'`, 'settings dialog');
         await setValue('#ai-provider', 'codex', 'change');

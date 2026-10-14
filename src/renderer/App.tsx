@@ -14,7 +14,7 @@ import { NotesWorkspace } from './NotesWorkspace';
 import { TerminalWorkspace } from './TerminalWorkspace';
 import styles from './App.module.css';
 import { applyTheme, readTheme, type AppTheme } from './theme';
-import { AI_PROVIDER_LABELS } from '../shared/ai-settings-types';
+import { AI_PROVIDER_LABELS, type AiProvider } from '../shared/ai-settings-types';
 import { SettingsDialog } from './SettingsDialog';
 import { useAiSettings } from './useAiSettings';
 
@@ -328,7 +328,8 @@ function formatCreditAmount(balance: string | null): string | null {
   return `${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${(fraction ?? '').padEnd(2, '0')}`;
 }
 
-function CodexUsagePanel() {
+function AiUsagePanel({ provider }: { provider: AiProvider }) {
+  const providerLabel = AI_PROVIDER_LABELS[provider];
   const [snapshot, setSnapshot] = useState<CodexUsageSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [requestError, setRequestError] = useState<string | null>(null);
@@ -339,15 +340,15 @@ function CodexUsagePanel() {
 
   useEffect(() => {
     const bridge = window.dashboard?.usage;
-    if (!bridge) { setRequestError('Codex usage requires the desktop app.'); setLoading(false); return; }
+    if (!bridge) { setRequestError('AI usage requires the desktop app.'); setLoading(false); return; }
     let mounted = true;
     void bridge.get().then((next) => {
-      if (mounted) { setSnapshot(next); setRequestError(null); }
+      if (mounted && next.provider === provider) { setSnapshot(next); setRequestError(null); }
     }).catch((reason: unknown) => {
       if (mounted) setRequestError(errorText(reason));
     }).finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
-  }, []);
+  }, [provider]);
 
   useEffect(() => {
     const bridge = window.dashboard?.usage;
@@ -356,7 +357,7 @@ function CodexUsagePanel() {
     const update = () => {
       if (document.visibilityState !== 'visible') return;
       void bridge.get().then((next) => {
-        if (mounted) { setSnapshot(next); setRequestError(null); }
+        if (mounted && next.provider === provider) { setSnapshot(next); setRequestError(null); }
       }).catch((reason: unknown) => {
         if (mounted) setRequestError(errorText(reason));
       });
@@ -365,13 +366,16 @@ function CodexUsagePanel() {
     document.addEventListener('visibilitychange', update);
     window.addEventListener('focus', update);
     return () => { mounted = false; window.clearInterval(timer); document.removeEventListener('visibilitychange', update); window.removeEventListener('focus', update); };
-  }, []);
+  }, [provider]);
 
   async function refresh() {
     const bridge = window.dashboard?.usage;
     if (!bridge || loading) return;
     setLoading(true);
-    try { setSnapshot(await bridge.refresh()); setRequestError(null); setConfirmReset(false); }
+    try {
+      const next = await bridge.refresh();
+      if (next.provider === provider) { setSnapshot(next); setRequestError(null); setConfirmReset(false); }
+    }
     catch (reason) { setRequestError(errorText(reason)); }
     finally { setLoading(false); }
   }
@@ -401,7 +405,12 @@ function CodexUsagePanel() {
 
   const status = loading && !snapshot ? 'Loading' : requestError ? (snapshot?.windows.length ? 'Cached' : 'Unavailable') : snapshot?.status === 'live' ? 'Live'
     : snapshot?.status === 'stale' ? 'Cached' : 'Unavailable';
-  const windows = snapshot?.windows ?? [];
+  const reportedWindows = snapshot?.windows ?? [];
+  const windows = provider === 'claude' ? [
+    ...(['five_hour', 'seven_day'] as const).map(key => reportedWindows.find(item => item.limitId === key)
+      ?? { limitId: key, label: key === 'five_hour' ? '5-hour limit' : 'Weekly limit', usedPercent: null, resetsAt: null, windowDurationMins: null }),
+    ...reportedWindows.filter(item => item.limitId !== 'five_hour' && item.limitId !== 'seven_day'),
+  ] : reportedWindows;
   const message = requestError ?? snapshot?.error;
   const creditBalance = snapshot?.creditBalance;
   const creditAmount = creditBalance?.unlimited ? 'Unlimited'
@@ -411,12 +420,12 @@ function CodexUsagePanel() {
   const resetChoices = snapshot?.resetBank?.credits ?? [];
   const selectedResetTitle = resetChoices.find((credit) => credit.id === selectedReset)?.title || 'the next available reset';
   return (
-    <section className={`${styles.panel} ${styles.aiPanel}`} aria-label="Codex CLI usage">
+    <section className={`${styles.panel} ${styles.aiPanel}`} aria-label={`${providerLabel} usage`}>
       <PanelTitle icon="sparkle" title="AI usage" tag={status}>
-        <button className={styles.iconButton} type="button" aria-label="Refresh Codex usage" title="Refresh Codex usage" disabled={loading} onClick={() => { void refresh(); }}><Icon name="refresh" size={13} /></button>
+        <button className={styles.iconButton} type="button" aria-label={`Refresh ${provider === 'claude' ? 'Claude' : 'Codex'} usage`} title={`Refresh ${providerLabel} usage`} disabled={loading} onClick={() => { void refresh(); }}><Icon name="refresh" size={13} /></button>
       </PanelTitle>
-      <p className={styles.aiIntro}>Codex CLI{snapshot?.planType ? ` · ${snapshot.planType} plan` : ''}</p>
-      <div className={styles.aiBalances} aria-label="Codex credits and reset bank">
+      <p className={styles.aiIntro}>{providerLabel}{snapshot?.planType ? ` · ${snapshot.planType} plan` : ''}</p>
+      {provider === 'codex' && <div className={styles.aiBalances} aria-label="Codex credits and reset bank">
         <div className={styles.aiBalance}>
           <span>Credits remaining</span>
           <strong title={creditBalance?.balance ?? creditAmount}>{creditAmount}</strong>
@@ -425,8 +434,8 @@ function CodexUsagePanel() {
           <span title="Earned rate-limit reset credits">Reset bank</span>
           <strong>{resetBank === undefined ? 'Not reported' : `${resetBank.toLocaleString('en-US')} available`}</strong>
         </div>
-      </div>
-      {resetBank !== undefined && resetBank > 0 && (
+      </div>}
+      {provider === 'codex' && resetBank !== undefined && resetBank > 0 && (
         <div className={styles.aiResetControl}>
           <label htmlFor="codex-reset-choice">Use an earned reset</label>
           <div className={styles.aiResetRow}>
@@ -453,18 +462,21 @@ function CodexUsagePanel() {
       {windows.length > 0 ? (
         <div className={styles.usageList}>
           {windows.map((item) => {
-            const used = Math.max(0, Math.min(100, item.usedPercent));
+            const used = item.usedPercent === null ? null : Math.max(0, Math.min(100, item.usedPercent));
             return (
               <div className={styles.usageItem} key={`${item.limitId}-${item.windowDurationMins ?? item.label}`}>
-                <div className={styles.usageLabels}><span>{item.label}</span><strong>{Math.round(used)}% used</strong></div>
-                <div className={styles.usageTrack} role="img" aria-label={`${item.label}: ${Math.round(used)} percent used`}><span className={styles.usagelime} style={{ width: `${used}%` }} /></div>
+                <div className={styles.usageLabels}><span>{item.label}</span><strong>{used === null ? 'Not reported' : `${Math.round(used)}% used`}</strong></div>
+                <div className={styles.usageTrack} role="img" aria-label={`${item.label}: ${used === null ? 'not reported' : `${Math.round(used)} percent used`}`}>
+                  {used !== null && <span className={styles.usagelime} style={{ width: `${used}%` }} />}</div>
                 <small className={styles.usageReset}>{formatReset(item.resetsAt)}</small>
               </div>
             );
           })}
         </div>
-      ) : <p className={styles.aiEmpty}>{loading ? 'Reading Codex usage…' : message ?? 'No usage windows are available from Codex CLI.'}</p>}
-      <div className={styles.aiNotice}><span className={styles.noticeIcon}>i</span><span>{message && windows.length > 0 ? `Showing cached usage · ${message}` : `Reported by your local Codex CLI · ${formatUpdated(snapshot?.fetchedAt ?? null)}`}</span></div>
+      ) : <p className={styles.aiEmpty}>{loading ? `Reading ${providerLabel} usage…` : message ?? `No usage windows are available from ${providerLabel}.`}</p>}
+      {provider === 'claude' && !reportedWindows.length && <p className={styles.aiEmpty} role="status">{loading ? 'Reading Claude usage…' : message}</p>}
+      <div className={styles.aiNotice}><span className={styles.noticeIcon}>i</span><span>{message && reportedWindows.length > 0 ? `Showing cached usage · ${message}`
+        : `${provider === 'claude' ? 'Claude subscription usage' : 'Reported by your local Codex CLI'} · ${formatUpdated(snapshot?.fetchedAt ?? null)}`}</span></div>
     </section>
   );
 }
@@ -558,12 +570,7 @@ export default function App() {
           </section>
         </div>
         <aside className={styles.rightColumn} aria-label="AI usage, notes, and vocabulary">
-          {aiSettings.provider === 'codex' ? <CodexUsagePanel key={aiSettings.codex.executable} /> : <section className={`${styles.panel} ${styles.aiPanel}`} aria-label="Claude CLI usage">
-            <PanelTitle icon="sparkle" title="AI usage" tag="Claude" />
-            <p className={styles.aiIntro}>Claude CLI</p>
-            <p className={styles.aiEmpty}>Claude CLI is selected for fox chat and vocabulary. Usage reporting and earned resets are available only for Codex CLI.</p>
-            <p className={styles.panelFootnote}>Open Settings to change your provider.</p>
-          </section>}
+          <AiUsagePanel key={`${aiSettings.provider}:${aiSettings[aiSettings.provider].executable}`} provider={aiSettings.provider} />
           <NotesWorkspace />
         </aside>
       </main>

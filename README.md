@@ -12,7 +12,7 @@ The application interface, messages, and documentation are in English. Translati
 - **AI settings:** choose Codex CLI or Claude CLI for fox chat and flashcards, with separate executable paths and optional model overrides for each provider. Settings save locally on Windows and Linux.
 - **System metrics:** live CPU, memory, and network readings. Temperature appears when the computer exposes a supported sensor. Sampling pauses while the dashboard is hidden.
 - **Weather:** current conditions and a three-day forecast from Open-Meteo, with city search and local caching. The initial city is Hanoi, Vietnam.
-- **Codex usage:** reported usage windows, credit balance, and earned rate-limit resets from the signed-in Codex CLI. Redeeming a reset requires confirmation in the app.
+- **AI usage:** Claude subscription 5-hour and weekly limits with reset times, or Codex usage windows, credits, and earned resets. Redeeming a Codex reset requires confirmation in the app.
 - **Desk companion:** fox chat and progress reports below Weather in the left sidebar. A compact System strip for CPU, memory, and network sits above the terminal. Chat and terminal progress reports save locally and return after restarting.
 - **Appearance:** saved light/dark themes, a resizable three-column layout, window controls, and a clickable fox companion.
 
@@ -28,7 +28,7 @@ Build installers on their target operating system so native dependencies match t
 
 Open the generated `Setup.exe` installer from a Windows build. The installer installs the app for the current user under `%LOCALAPPDATA%\Bachnv6Desktop` and creates shortcuts. The normal per-user installation does not require administrator privileges. See the [Squirrel.Windows installation process](https://github.com/Squirrel/Squirrel.Windows/blob/develop/docs/using/install-process.md).
 
-The packaged app includes Electron and its runtime dependencies. Node.js is needed for development, not for running the installed app. Install and sign in to Codex CLI or Claude Code separately to use fox chat and AI flashcards. The usage panel requires Codex CLI. npm-installed CLIs also need their own Node.js runtime.
+The packaged app includes Electron and its runtime dependencies. Node.js is needed for development, not for running the installed app. Install and sign in to Codex CLI or Claude Code separately to use fox chat, AI flashcards, and the selected provider's usage panel. npm-installed CLIs also need their own Node.js runtime.
 
 To produce the installer from source on Windows, follow the development setup below and run:
 
@@ -41,10 +41,10 @@ The Windows installer is written to `out/make/squirrel.windows/x64/`.
 
 ## Install on Ubuntu
 
-Download the Ubuntu amd64 DEB from [GitHub Releases](https://github.com/nguyenbach03022003/bachnv6-desktop/releases). For version 0.4.12, install it from the folder containing it:
+Download the Ubuntu amd64 DEB from [GitHub Releases](https://github.com/nguyenbach03022003/bachnv6-desktop/releases). For version 0.5.1, install it from the folder containing it:
 
 ```bash
-sudo apt install ./bachnv6-desktop_0.4.12_amd64.deb
+sudo apt install ./bachnv6-desktop_0.5.1_amd64.deb
 bachnv6-desktop
 ```
 
@@ -84,6 +84,7 @@ Available commands:
 | `npm run smoke:notes` | Check image viewing, detach/merge, save failures, and restoring notes using an offline temporary profile. |
 | `npm run smoke:companion` | Check fox chat, cancellation, report imports, saved history, and responsive layouts using a temporary profile and fake CLI. |
 | `npm run smoke:ai-settings` | Check provider switching, saved settings, both CLI adapters, cancellation, usage isolation, executable discovery, and settings UI using offline fake CLIs. |
+| `npm run smoke:claude-usage` | Check Claude usage parsing, sign-in discovery, caching, rate-limit backoff, account isolation, and credential protection with dummy credentials and mocked HTTPS. |
 
 Application bundles, installers, validation results, and screenshots are written to `out/`. Vite intermediate output is written to `.vite/`. Both directories are ignored by Git.
 
@@ -113,7 +114,7 @@ Leave **Executable** blank for automatic detection, or use **Browse** to select 
 
 Choose **Save settings** to apply the selection to new AI requests. Running requests retain the provider they started with. Each provider's executable and model are remembered separately in `userData/ai-settings.json` and restored after restarting. Terminal tabs continue to run normal shells; start `claude` or `codex` there as usual. The setting does not install a CLI or change its account configuration.
 
-The usage panel shows Codex account usage and earned resets only when Codex is selected. In Claude mode it explains that usage reporting is unavailable; it does not display Codex account values as Claude usage.
+The usage panel follows the selected provider. Claude shows subscription 5-hour and weekly usage percentages and reset times; Codex shows its reported usage windows, credits, and earned resets. Earned resets are available only for Codex.
 
 The integrations follow the official [Codex CLI reference](https://learn.chatgpt.com/docs/developer-commands?surface=cli) and [Claude Code CLI reference](https://code.claude.com/docs/en/cli-reference).
 
@@ -173,6 +174,14 @@ Install Codex CLI and sign in with `codex login` to enable the usage panel. On U
 
 The panel shows values reported by `codex app-server`. Missing values appear as **Not reported**. When an earned reset is available, choose a listed reset or **Next available reset**, select **Use reset**, and confirm. The app then refreshes usage and the reset bank.
 
+### Claude usage
+
+Choose **Claude CLI** in Settings and sign in to a Claude subscription with `claude auth login`. The usage panel shows **5-hour limit**, **Weekly limit**, and their reset times. Additional Sonnet or Opus weekly limits appear when reported. Missing windows show **Not reported**, rather than an invented zero.
+
+The app reads Claude's saved OAuth sign-in from `~/.claude/.credentials.json` on Linux or `%USERPROFILE%\.claude\.credentials.json` on Windows, honoring `CLAUDE_CONFIG_DIR` and `CLAUDE_CODE_OAUTH_TOKEN` when set. Credentials stay in the main process; they are never sent to the renderer, copied into app settings, or included in diagnostics. Claude sign-in storage is described in the official [authentication documentation](https://code.claude.com/docs/en/authentication).
+
+Usage requests go only to Anthropic's subscription usage endpoint. This endpoint is undocumented and can change. Subscription limits differ from API token billing; API-key-only accounts may not report these windows. The app does not generate a model reply to check usage. Responses cache for five minutes, manual refreshes are limited to once per minute, and HTTP 429 cooldowns are respected. Temporary failures keep clearly marked cached values; sign-out, account changes, and authentication errors clear previous account values. Run `claude auth login` if the panel requests a new sign-in.
+
 ## Local data and external requests
 
 | Feature | Local storage | External service |
@@ -184,6 +193,7 @@ The panel shows values reported by `codex app-server`. Missing values appear as 
 | Weather | Electron `userData/weather` | Open-Meteo receives city searches and selected coordinates. |
 | Translation | In-memory text/cache; preferences stored locally | Google receives submitted or selected text. |
 | Codex usage | CLI-managed account state; usage held in memory | The signed-in Codex CLI obtains account usage. |
+| Claude usage | CLI-managed OAuth sign-in read in the main process; usage held in memory | Anthropic receives an authenticated subscription usage request. |
 | Theme and UI preferences | Local browser storage in the app profile | None |
 | System metrics | In-memory samples | None |
 

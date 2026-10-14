@@ -82,7 +82,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         {check.executable && <code>{check.executable}</code>}
       </div>}
       {error && <p className={styles.error} role="alert">{error}</p>}
-      <p className={styles.notice}>{draft.provider === 'claude' ? 'Usage reporting and earned resets are available only for Codex. ' : ''}Settings are saved on this machine. New AI requests use the selected CLI; running requests keep their current provider. Terminal shells remain under your control.</p>
+      <p className={styles.notice}>{draft.provider === 'claude' ? 'The usage panel shows your Claude subscription’s 5-hour and weekly limits. Earned resets are available only for Codex. ' : ''}Settings are saved on this machine. New AI requests use the selected CLI; running requests keep their current provider. Terminal shells remain under your control.</p>
       <footer className={styles.actions}><button type="button" disabled={!!busy} onClick={onClose}>Cancel</button>
         <button className={styles.primary} type="submit" disabled={loading || !!busy || !bridge}>{busy === 'save' ? 'Saving…' : 'Save settings'}</button></footer>
     </form>

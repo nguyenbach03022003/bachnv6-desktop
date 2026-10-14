@@ -1,7 +1,8 @@
 import type { NotesApi } from './notes-types';
 import type { SystemMetricsSample } from './system-metrics-types';
 import type { WeatherLocation, WeatherSnapshot } from './weather-types';
-import type { CodexResetResult, CodexUsageSnapshot } from './codex-usage-types';
+import type { CodexResetResult } from './codex-usage-types';
+import type { AiUsageSnapshot } from './ai-usage-types';
 import type { TranslationApi } from './translation-types';
 import type { VocabularyApi } from './vocabulary-types';
 import type { NotesWorkspaceApi } from './notes-workspace-types';
@@ -46,8 +47,8 @@ export interface DesktopApi {
     setLocation(location: WeatherLocation): Promise<WeatherSnapshot>;
   };
   usage: {
-    get(): Promise<CodexUsageSnapshot>;
-    refresh(): Promise<CodexUsageSnapshot>;
+    get(): Promise<AiUsageSnapshot>;
+    refresh(): Promise<AiUsageSnapshot>;
     useReset(creditId: string | null): Promise<CodexResetResult>;
   };
   translation: TranslationApi;

@@ -5,6 +5,7 @@ import { app, BrowserWindow, ipcMain } from 'electron';
 import type { CodexCreditBalance, CodexResetBank, CodexResetOutcome, CodexResetResult, CodexUsageSnapshot, CodexUsageWindow } from './shared/codex-usage-types';
 import { startCodexAppServer } from './ai-cli';
 import { getAiSettings } from './ai-settings-service';
+import { claudeUsage } from './claude-usage-service';
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 20 * 1000;
@@ -241,8 +242,6 @@ let cachedSettings = '';
 
 async function getSnapshot(force: boolean): Promise<CodexUsageSnapshot> {
   const settings = await getAiSettings();
-  if (settings.provider !== 'codex') return { status: 'unavailable', planType: null, windows: [], fetchedAt: null,
-    creditBalance: null, resetBank: null, error: 'Claude CLI usage reporting is not available in this app.', nextRefreshAt: null };
   const key = JSON.stringify(settings.codex);
   if (redemptionInFlight) return (await redemptionInFlight).snapshot;
   if (inFlight) {
@@ -297,20 +296,22 @@ export function registerCodexUsageIpc(getWindow: () => BrowserWindow | null): vo
     }
   });
   for (const [channel, force] of [['usage:get', false], ['usage:refresh', true]] as const) {
-    ipcMain.handle(channel, (event) => {
+    ipcMain.handle(channel, async (event) => {
       const window = getWindow();
       if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
         throw new Error('Unknown window');
       }
-      return getSnapshot(force);
+      if ((await getAiSettings()).provider === 'claude') return claudeUsage.get(force);
+      return { ...await getSnapshot(force), provider: 'codex' };
     });
   }
-  ipcMain.handle('usage:use-reset', (event, creditId: unknown) => {
+  ipcMain.handle('usage:use-reset', async (event, creditId: unknown) => {
     const window = getWindow();
     if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) {
       throw new Error('Unknown window');
     }
     if (creditId !== null && typeof creditId !== 'string') throw new Error('Invalid reset selection.');
+    if ((await getAiSettings()).provider !== 'codex') throw new Error('Earned resets are available only with Codex CLI.');
     return useReset(creditId);
   });
 }

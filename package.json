@@ -1,7 +1,7 @@
 {
   "name": "bachnv6-desktop",
   "productName": "Bachnv6 Desktop",
-  "version": "0.4.12",
+  "version": "0.5.1",
   "description": "A personal desktop dashboard for Windows and Linux",
   "author": "Bachnv6",
   "license": "UNLICENSED",
@@ -17,7 +17,8 @@
     "smoke:terminal": "node scripts/smoke-terminal.cjs",
     "smoke:notes": "node scripts/smoke-notes.cjs",
     "smoke:companion": "node scripts/smoke-companion.cjs",
-    "smoke:ai-settings": "node scripts/smoke-ai-settings.cjs"
+    "smoke:ai-settings": "node scripts/smoke-ai-settings.cjs",
+    "smoke:claude-usage": "node scripts/smoke-claude-usage.cjs"
   },
   "dependencies": {
     "@tiptap/react": "^3.31.3",
