@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, '..');
 if (!process.versions.electron) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'bachnv6-terminal-'));
   try {
-    const result = require('node:child_process').spawnSync(require('electron'), [__filename], {
+    const result = require('node:child_process').spawnSync(require('electron'), [...(process.env.DESKTOP_SMOKE_NO_SANDBOX === '1' ? ['--no-sandbox'] : []), __filename], {
       cwd: root, stdio: 'inherit', windowsHide: true, timeout: 90000,
       env: { ...process.env, TERMINAL_SMOKE_PROFILE: profile },
     });
@@ -18,6 +18,7 @@ if (!process.versions.electron) {
   }
 } else {
   const { app, BrowserWindow } = require('electron');
+  process.on('uncaughtException', reason => { console.error(reason); app.exit(1); });
   const profile = process.env.TERMINAL_SMOKE_PROFILE;
   assert(profile && path.dirname(profile) === os.tmpdir() && path.basename(profile).startsWith('bachnv6-terminal-'));
   app.setPath('userData', profile);
@@ -141,12 +142,14 @@ if (!process.versions.electron) {
       fs.writeFileSync(path.join(output, 'terminal-close-confirmation.png'), (await win.webContents.capturePage()).toPNG());
       await run(`[...document.querySelector('dialog[open]').querySelectorAll('button')].find(b => b.textContent === 'Cancel').click()`);
       await until(`!document.querySelector('dialog[open]')`, 'cancel closes dialog');
+      await until(`document.activeElement.getAttribute('aria-label') === 'Close Terminal 2'`, 'cancel restores tab focus');
       assert.equal(await command('CANCELLED_PID:'), secondPid);
       await run(`document.querySelector('[aria-label="Close Terminal 2"]').click()`);
       await until(`Boolean(document.querySelector('dialog[open]'))`, 'second close dialog');
       win.webContents.sendInputEvent({type:'keyDown', keyCode:'Escape'});
       win.webContents.sendInputEvent({type:'keyUp', keyCode:'Escape'});
       await until(`!document.querySelector('dialog[open]')`, 'Escape cancels');
+      await until(`document.activeElement.getAttribute('aria-label') === 'Close Terminal 2'`, 'Escape restores tab focus');
       assert.equal(await command('ESCAPE_PID:'), secondPid);
       check('Close defaults to Cancel; Cancel and Escape keep the same running shell');
       await until(`Boolean(document.querySelector('button[aria-label^="Switch typing"]:not(:disabled)'))`, 'typing ready');

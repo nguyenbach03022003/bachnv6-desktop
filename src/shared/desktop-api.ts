@@ -8,6 +8,7 @@ import type { VocabularyApi } from './vocabulary-types';
 import type { NotesWorkspaceApi } from './notes-workspace-types';
 import type { CompanionApi } from './companion-types';
 import type { AiSettingsApi } from './ai-settings-types';
+import type { StartedTerminal, TerminalSessionsApi, TerminalStartOptions } from './terminal-types';
 
 export interface WindowState {
   maximized: boolean;
@@ -22,7 +23,8 @@ export interface DesktopApi {
   close(): Promise<void>;
   getWindowState(): Promise<WindowState>;
   onWindowStateChanged(listener: (state: WindowState) => void): () => void;
-  createTerminal(cols: number, rows: number): Promise<{ id: string; shell: string; cwd: string; reportFile?: string }>;
+  createTerminal(cols: number, rows: number, options?: TerminalStartOptions): Promise<StartedTerminal>;
+  sessions: TerminalSessionsApi;
   writeTerminal(id: string, data: string): Promise<void>;
   resizeTerminal(id: string, cols: number, rows: number): Promise<void>;
   closeTerminal(id: string): Promise<void>;

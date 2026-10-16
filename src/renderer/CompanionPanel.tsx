@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CompanionSnapshot, ReportStatus } from '../shared/companion-types';
 import { MascotWidget } from './MascotWidget';
+import { CompanionSessions } from './CompanionSessions';
 import { OPEN_TERMINAL_EVENT, REPORT_DRAFT_EVENT, type ReportDraft } from './companion-events';
 import styles from './CompanionPanel.module.css';
 
@@ -9,7 +10,7 @@ const formatTime = (time: string) => new Date(time).toLocaleTimeString('en-US', 
 
 export function CompanionPanel({ className }: { className: string }) {
   const [snapshot, setSnapshot] = useState<CompanionSnapshot>({ messages: [], reports: [], busy: false, error: null });
-  const [view, setView] = useState<'chat' | 'reports'>('chat');
+  const [view, setView] = useState<'chat' | 'reports' | 'sessions'>('chat');
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -93,9 +94,10 @@ export function CompanionPanel({ className }: { className: string }) {
           <div className={styles.tabs} role="group" aria-label="Companion view">
             <button type="button" aria-pressed={view === 'chat'} onClick={() => setView('chat')}>Chat</button>
             <button type="button" aria-pressed={view === 'reports'} onClick={() => setView('reports')}>Reports {snapshot.reports.length || ''}</button>
+            <button type="button" aria-pressed={view === 'sessions'} onClick={() => setView('sessions')}>Sessions</button>
           </div>
         </header>
-        {view === 'chat' ? <>
+        {view === 'sessions' ? <CompanionSessions /> : view === 'chat' ? <>
           <div className={styles.history} ref={listRef} role="log" aria-label="Fox conversation">
             {!snapshot.messages.length && <p className={styles.empty}>Hi, I’m your desk fox. Ask me about your work or save a terminal progress report.</p>}
             {snapshot.messages.map((message) => <div key={message.id} className={styles.message} data-role={message.role}>

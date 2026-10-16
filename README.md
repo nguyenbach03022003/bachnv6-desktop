@@ -13,7 +13,7 @@ The application interface, messages, and documentation are in English. Translati
 - **System metrics:** live CPU, memory, and network readings. Temperature appears when the computer exposes a supported sensor. Sampling pauses while the dashboard is hidden.
 - **Weather:** current conditions and a three-day forecast from Open-Meteo, with city search and local caching. The initial city is Hanoi, Vietnam.
 - **AI usage:** Claude subscription 5-hour and weekly limits with reset times, or Codex usage windows, credits, and earned resets. Redeeming a Codex reset requires confirmation in the app.
-- **Desk companion:** fox chat and progress reports below Weather in the left sidebar. A compact System strip for CPU, memory, and network sits above the terminal. Chat and terminal progress reports save locally and return after restarting.
+- **Desk companion:** fox chat, progress reports, and saved terminal sessions below Weather in the left sidebar. Browse saved output, reopen closed terminals, and resume connected Codex/Claude conversations after closing a tab or restarting the app. A compact System strip for CPU, memory, and network sits above the terminal.
 - **Appearance:** saved light/dark themes, a resizable three-column layout, window controls, and a clickable fox companion.
 
 ## Supported platforms
@@ -41,10 +41,10 @@ The Windows installer is written to `out/make/squirrel.windows/x64/`.
 
 ## Install on Ubuntu
 
-Download the Ubuntu amd64 DEB from [GitHub Releases](https://github.com/nguyenbach03022003/bachnv6-desktop/releases). For version 0.5.1, install it from the folder containing it:
+Download the Ubuntu amd64 DEB from [GitHub Releases](https://github.com/nguyenbach03022003/bachnv6-desktop/releases). For version 0.5.2, install it from the folder containing it:
 
 ```bash
-sudo apt install ./bachnv6-desktop_0.5.1_amd64.deb
+sudo apt install ./bachnv6-desktop_0.5.2_amd64.deb
 bachnv6-desktop
 ```
 
@@ -80,6 +80,7 @@ Available commands:
 | `npm run make:ubuntu` | Build only the Ubuntu amd64 DEB. |
 | `npm run smoke:theme` | Check themes, terminal sessions, responsive layout, and saved theme preferences. |
 | `npm run smoke:terminal` | Check tab reordering, close confirmation, shell preservation, and input shortcuts. |
+| `npm run smoke:sessions` | Check saved terminal output, working directories, exact Codex/Claude resume commands, restart recovery, connection failures, and history deletion with real shells and offline fake CLIs. |
 | `npm run smoke:desktop` | Check desktop integrations using a temporary app profile. |
 | `npm run smoke:notes` | Check image viewing, detach/merge, save failures, and restoring notes using an offline temporary profile. |
 | `npm run smoke:companion` | Check fox chat, cancellation, report imports, saved history, and responsive layouts using a temporary profile and fake CLI. |
@@ -122,7 +123,7 @@ The integrations follow the official [Codex CLI reference](https://learn.chatgpt
 
 Create a tab to start a separate shell. Rename a tab by double-clicking its name, selecting its pencil button, or pressing F2 while the tab button has focus. Enter or clicking elsewhere saves the name; Escape cancels. Names are limited to 40 characters.
 
-Renaming or changing the theme preserves the running shell and its output. Closing a tab stops its shell. Tabs and their names last for the current app session.
+Renaming or changing the theme preserves the running shell and its output. Closing a tab stops its shell and running commands, while its name, saved output, working directory, and connected AI session remain in **Desk Companion → Sessions**. Reopening starts a new shell; shell variables and running processes cannot be restored. Tab order and the set of visible tabs last for the current app session.
 
 Drag a terminal tab to change its position. With a tab focused, **Alt+Left** and **Alt+Right** also move it. Reordering keeps the same running shell and output. Closing a tab asks for confirmation; **Cancel** or Escape keeps it open.
 
@@ -143,6 +144,24 @@ For automatic milestone reports from Claude or Codex in a workspace terminal, ch
 ```
 
 The app imports changed reports about once per second. Supported statuses are `working`, `waiting`, `completed`, and `failed`. Task text is limited to 160 characters and report messages to 8,000 characters. This connection requires the session to publish reports; ordinary interactive terminal output is not automatically interpreted as progress. Connections start with new workspace shells. Chat retains the latest 100 messages and reports retain the latest 200 updates in `userData/companion`.
+
+### Saved terminal sessions
+
+Open **Desk Companion → Sessions** to search current and closed sessions. **Open terminal** focuses an already running tab. **Reopen terminal** starts a fresh shell in the saved folder and shows the saved output above its new prompt. **History & connection** lets you read or copy the saved output, connect an AI session, reopen only its shell, or delete a closed session after confirmation. Deleting a session’s saved history leaves progress reports and the CLI’s conversation files in place.
+
+Terminal output saves locally about once per second, when closing a tab, and before quitting the app. Each session keeps its latest 512K UTF-16 characters; the history view indicates when earlier output was trimmed. Sudden power loss or a forced process termination can lose output since the last successful save. Saved output is a terminal log; full-screen CLI redraws can appear as repeated text. ANSI formatting and control sequences are removed from the history view. Input is not recorded separately; only text echoed or printed by the terminal is saved.
+
+PowerShell publishes its current filesystem directory with its normal prompt. Other shells can publish a directory using OSC 7; automatic reports can also include an absolute `cwd`. When neither is available, the session retains its launch folder. Reopening fails visibly if the saved folder no longer exists.
+
+To continue a Codex or Claude conversation, open **History & connection**, choose its provider, enter its actual session UUID, and select **Save connection**. The session card then offers **Resume Codex** or **Resume Claude**. The app invokes `codex resume <UUID>` or `claude --resume <UUID>` using that provider’s configured executable, independently of the provider selected for fox chat. The CLI must still be installed, signed in, and have its original local conversation files. CLI errors appear in the terminal; the saved history remains available. These commands follow the [Codex CLI reference](https://learn.chatgpt.com/docs/cli/reference) and [Claude CLI reference](https://code.claude.com/docs/en/cli-reference).
+
+The app also recognizes explicit `codex resume <UUID>` and `claude --resume <UUID>` commands printed in this terminal. For a connection before closing the CLI, use **Connect reports** and include the actual provider and session ID in a report:
+
+```json
+{"task":"Fix login","message":"Tests passed","status":"completed","cwd":"/home/me/project","ai":{"provider":"codex","sessionId":"00000000-0000-0000-0000-000000000001"}}
+```
+
+Replace the example UUID and directory with the session’s real values. Codex tools can read their actual `CODEX_THREAD_ID`. If the ID is unknown, omit `ai` and connect it manually later. The app does not choose a global “last session,” which could belong to another terminal. Sessions created before this feature cannot recover output that was never saved.
 
 ### Translation shortcuts
 
@@ -188,6 +207,7 @@ Usage requests go only to Anthropic's subscription usage endpoint. This endpoint
 | --- | --- | --- |
 | Notes and attachments | Electron `userData/notes` | None |
 | Fox chat and progress reports | Electron `userData/companion` | The selected CLI receives submitted chat, recent conversation, and latest reports when you send a message. |
+| Saved terminal sessions | Electron `userData/companion/sessions` (metadata, bounded output, and CLI session references) | None for saving or reading history; Resume opens the connected CLI, which uses its own account and conversation storage. |
 | Vocabulary and review counts | Electron `userData/vocabulary` | The selected CLI sends entered words for AI generation. |
 | AI provider settings | Electron `userData/ai-settings.json` | None; Check CLI reads the locally installed version. |
 | Weather | Electron `userData/weather` | Open-Meteo receives city searches and selected coordinates. |

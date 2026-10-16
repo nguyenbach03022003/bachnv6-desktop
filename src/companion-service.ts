@@ -4,6 +4,7 @@ import path from 'node:path';
 import { app, ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
 import { runAiPrompt } from './ai-cli';
 import type { CompanionMessage, CompanionSnapshot, ProgressReport, ReportStatus } from './shared/companion-types';
+import { aiSessionLink, type TerminalHistoryStore } from './terminal-history-service';
 
 const statuses: ReportStatus[] = ['working', 'waiting', 'completed', 'failed'];
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -21,7 +22,7 @@ function id(value: unknown): string {
   return value;
 }
 
-export function registerCompanionIpc(getWindow: () => BrowserWindow | null) {
+export function registerCompanionIpc(getWindow: () => BrowserWindow | null, terminalHistory: TerminalHistoryStore) {
   const folder = path.join(app.getPath('userData'), 'companion');
   const history = path.join(folder, 'history.json');
   const inbox = path.join(folder, 'reports');
@@ -42,7 +43,7 @@ export function registerCompanionIpc(getWindow: () => BrowserWindow | null) {
   }
   function publish(): void {
     const window = getWindow();
-    if (window && !window.isDestroyed()) window.webContents.send('companion:update', snapshot);
+    if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send('companion:update', snapshot);
   }
   function serial<T>(operation: () => Promise<T>): Promise<T> {
     const result = tail.then(operation);
@@ -95,6 +96,10 @@ export function registerCompanionIpc(getWindow: () => BrowserWindow | null) {
     if (!record(raw)) throw new Error('Invalid report');
     const entry: ProgressReport = { id: randomUUID(), sessionId: id(raw.sessionId), source: text(raw.source, 40),
       task: text(raw.task, 160), message: text(raw.message, 8000), status: status(raw.status), createdAt: new Date().toISOString() };
+    const ai = raw.ai === undefined ? undefined : aiSessionLink(raw.ai);
+    const cwd = raw.cwd === undefined ? undefined : text(raw.cwd, 4096);
+    if (cwd !== undefined && (!path.isAbsolute(cwd) || /[\x00-\x1f]/.test(cwd))) throw new Error('Invalid session working directory.');
+    if (ai !== undefined || cwd !== undefined) await terminalHistory.update(entry.sessionId, { ...(ai !== undefined ? { ai } : {}), ...(cwd !== undefined ? { cwd } : {}) });
     await serial(async () => {
       await load();
       await persist({ ...snapshot, error: null, reports: [...snapshot.reports, entry].slice(-200) });
@@ -105,10 +110,13 @@ export function registerCompanionIpc(getWindow: () => BrowserWindow | null) {
     return serial(async () => { await load(); return snapshot; });
   });
   ipcMain.handle('companion:report', (event, raw: unknown) => { assertSender(event); return saveReport(raw); });
-  ipcMain.handle('companion:label', (event, rawId: unknown, rawName: unknown) => {
+  ipcMain.handle('companion:label', async (event, rawId: unknown, rawName: unknown) => {
     assertSender(event);
-    const source = sources.get(id(rawId));
-    if (source) source.name = text(rawName, 40);
+    const sessionId = id(rawId);
+    const name = text(rawName, 40);
+    await terminalHistory.update(sessionId, { name });
+    const source = sources.get(sessionId);
+    if (source) source.name = name;
   });
   ipcMain.handle('companion:cancel', (event) => { assertSender(event); replyController?.abort(); });
   ipcMain.handle('companion:clear-chat', (event) => {
@@ -174,15 +182,32 @@ export function registerCompanionIpc(getWindow: () => BrowserWindow | null) {
     if (quitting) return;
     quitting = true;
     clearInterval(timer);
+    terminalHistory.stop();
     replyController?.abort();
-    void scanTask.then(() => tail).finally(() => { flushed = true; app.quit(); });
+    void scanTask.then(() => tail).then(() => terminalHistory.flush())
+      .catch((reason) => console.error('Could not flush companion sessions', reason))
+      .finally(() => { flushed = true; app.quit(); });
   });
   return {
     async trackTerminal(sessionId: string): Promise<string> {
       await fs.mkdir(inbox, { recursive: true });
       // Keep current terminal registrations bounded, including closed tabs.
       if (sources.size >= 200) sources.delete(sources.keys().next().value!);
-      sources.set(id(sessionId), { name: 'Terminal', signature: '', stamp: '' });
+      const existing = sources.get(id(sessionId));
+      const saved = await terminalHistory.get(sessionId).catch(() => null);
+      const source = existing ?? { name: saved?.name ?? 'Terminal', signature: '', stamp: '' };
+      if (saved && !existing) {
+        // A resumed shell keeps its report path; do not import its old milestone again.
+        const file = path.join(inbox, `${sessionId}.json`);
+        try {
+          const stat = await fs.lstat(file);
+          if (stat.isFile() && !stat.isSymbolicLink() && stat.size <= 32000) {
+            source.signature = (await fs.readFile(file, 'utf8')).replace(/^\uFEFF/, '');
+            source.stamp = `${stat.mtimeMs}:${stat.size}`;
+          }
+        } catch { /* The resumed session may not have published a report yet. */ }
+      }
+      sources.set(sessionId, source);
       return path.join(inbox, `${sessionId}.json`);
     },
   };

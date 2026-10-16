@@ -8,7 +8,8 @@ import '@xterm/xterm/css/xterm.css';
 import styles from './TerminalWorkspace.module.css';
 import { terminalThemes, type AppTheme } from './theme';
 import { isTranslateSelectionShortcut, TRANSLATE_SELECTION_ARIA_SHORTCUT, TRANSLATE_SELECTION_SHORTCUT } from './translation-shortcut';
-import { OPEN_TERMINAL_EVENT, REPORT_DRAFT_EVENT } from './companion-events';
+import { OPEN_TERMINAL_EVENT, REPORT_DRAFT_EVENT, REOPEN_TERMINAL_EVENT, type ReopenTerminalRequest } from './companion-events';
+import type { TerminalStartOptions } from '../shared/terminal-types';
 import { createEngine, REPLACE, PASSTHROUGH, type VietTelexEngine, type TypingAction } from '@viettelex/core';
 import { useInputLanguage } from './InputLanguage';
 
@@ -20,7 +21,7 @@ interface TerminalSession {
 }
 
 interface TerminalBridge {
-  createTerminal(cols: number, rows: number): Promise<TerminalSession>;
+  createTerminal(cols: number, rows: number, options?: TerminalStartOptions): Promise<TerminalSession>;
   writeTerminal(id: string, data: string): Promise<void>;
   resizeTerminal(id: string, cols: number, rows: number): Promise<void>;
   closeTerminal(id: string): Promise<void>;
@@ -30,7 +31,7 @@ interface TerminalBridge {
   writeTerminalClipboard(text: string): Promise<void>;
 }
 
-type Tab = { id: number; generation: number; name: string };
+type Tab = { id: number; generation: number; name: string; sessionId?: string; live?: boolean; restore?: ReopenTerminalRequest };
 const MAX_TAB_NAME_LENGTH = 40;
 type SessionState =
   | { kind: 'connecting' }
@@ -68,6 +69,8 @@ function TerminalPane({
   tab,
   tabId,
   onRestart,
+  onStarted,
+  onStopped,
   autoTranslate,
   onTranslateSelection,
 }: {
@@ -79,6 +82,8 @@ function TerminalPane({
   tab: Tab;
   tabId: string;
   onRestart: () => void;
+  onStarted: (sessionId: string) => void;
+  onStopped: () => void;
   autoTranslate: boolean;
   onTranslateSelection?: (text: string) => Promise<void>;
 }) {
@@ -144,7 +149,7 @@ function TerminalPane({
       try {
         fit.fit();
         const size = `${terminal.cols}:${terminal.rows}`;
-        if (sessionId && size !== lastSize) {
+        if (sessionId && !exited && size !== lastSize) {
           void bridge!.resizeTerminal(sessionId, terminal.cols, terminal.rows).catch((error: unknown) => {
             if (!disposed && !exited) setState({ kind: 'error', message: `Terminal resize failed: ${errorMessage(error)}` });
           });
@@ -173,6 +178,7 @@ function TerminalPane({
       if (disposed) return;
       if (id === sessionId) {
         exited = true;
+        onStopped();
         terminal.options.disableStdin = true;
         setState({ kind: 'exited', exitCode });
       } else if (creating) {
@@ -298,13 +304,25 @@ function TerminalPane({
       const cols = Math.max(2, terminal.cols);
       const rows = Math.max(1, terminal.rows);
       lastSize = `${cols}:${rows}`;
-      void bridge.createTerminal(cols, rows).then((session) => {
+      const historyReady = tab.restore ? window.dashboard!.sessions.read(tab.restore.sessionId).then(history => {
+        if (!disposed && history.output) {
+          terminal.write(history.output.replace(/\n/g, '\r\n'));
+          terminal.writeln('\r\n── Saved output ends; opening a new terminal ──\r\n');
+        }
+      }) : Promise.resolve();
+      void historyReady.then(() => {
+        if (disposed) throw new Error('Terminal tab was closed before it could open.');
+        return bridge.createTerminal(cols, rows, { name: nameRef.current,
+          ...(tab.restore ? { sessionId: tab.restore.sessionId, resumeAi: tab.restore.resumeAi } : {}) });
+      }).then((session) => {
         if (disposed) {
           void bridge.closeTerminal(session.id).catch(() => undefined);
           return;
         }
         sessionId = session.id;
         sessionRef.current = session;
+        onStarted(session.id);
+        tab.restore?.resolve();
         setReportFile(session.reportFile ?? null);
         void window.dashboard?.companion.labelTerminal(session.id, nameRef.current).catch(() => undefined);
         creating = false;
@@ -315,6 +333,7 @@ function TerminalPane({
         earlyExits.clear();
         if (exitCode !== undefined) {
           exited = true;
+          onStopped();
           terminal.options.disableStdin = true;
           setState({ kind: 'exited', exitCode });
         } else {
@@ -323,7 +342,9 @@ function TerminalPane({
         }
         fitTerminal();
       }).catch((error: unknown) => {
+        tab.restore?.reject(error);
         if (!disposed) {
+          onStopped();
           creating = false;
           earlyData.clear();
           earlyExits.clear();
@@ -334,6 +355,7 @@ function TerminalPane({
 
     return () => {
       disposed = true;
+      if (!sessionId) tab.restore?.reject(new Error('Terminal tab was closed before it could open.'));
       window.clearTimeout(startTimer);
       window.clearTimeout(selectionTimer);
       resizeObserver.disconnect();
@@ -452,10 +474,10 @@ function TerminalPane({
       </div>
       {reportHelp && <div className={styles.reportHelp}>
           <p>Give this instruction to Claude or Codex in this terminal:</p>
-        <p>After each milestone, overwrite the UTF-8 JSON file at DESK_COMPANION_REPORT with task, message, and status (working, waiting, completed, or failed). Use the environment variable for the path.</p>
+        <p>After each milestone, overwrite the UTF-8 JSON file at DESK_COMPANION_REPORT with task, message, and status (working, waiting, completed, or failed). Include cwd and ai (provider and sessionId) to let Desk Companion resume this conversation. Use your actual CLI session ID; Codex exposes CODEX_THREAD_ID to its tools.</p>
         <code>{'{"task":"Fix login","message":"Tests passed","status":"completed"}'}</code>
         <p>Report file: {reportFile}</p>
-        <button type="button" onClick={() => { void bridge?.writeTerminalClipboard('After each milestone, overwrite the UTF-8 JSON file at the path in the DESK_COMPANION_REPORT environment variable with an object containing task, message, and status (working, waiting, completed, or failed). Keep reports concise.').catch((reason) => setClipboardError(errorMessage(reason))); }}>Copy instruction</button>
+        <button type="button" onClick={() => { void bridge?.writeTerminalClipboard('After each milestone, overwrite the UTF-8 JSON file at the path in the DESK_COMPANION_REPORT environment variable with an object containing task, message, and status (working, waiting, completed, or failed). Also include cwd (your absolute working directory) and ai: {provider: "codex" or "claude", sessionId: your actual CLI session UUID} so Desk Companion can resume this conversation after closing. For Codex, read CODEX_THREAD_ID from your tool environment. Omit ai if the actual ID is unknown; never guess. Keep reports concise.').catch((reason) => setClipboardError(errorMessage(reason))); }}>Copy instruction</button>
       </div>}
       {mouseReporting && <div id={`${panelId}-selection-hint`} className={styles.selectionHint} role="status">
         Hold <kbd>Shift</kbd> and drag to select text. Release Shift, then press <kbd>{TRANSLATE_SELECTION_SHORTCUT}</kbd> to translate.
@@ -485,6 +507,30 @@ export function TerminalWorkspace({ theme, autoTranslate = false, onTranslateSel
   const cancelCloseRef = useRef<HTMLButtonElement>(null);
   const pendingClose = tabs.find(tab => tab.id === pendingCloseId);
   const bridge = getBridge();
+
+  useEffect(() => {
+    function reopen(event: Event) {
+      const request = (event as CustomEvent<ReopenTerminalRequest>).detail;
+      event.preventDefault();
+      const existing = tabs.find(tab => tab.sessionId === request.sessionId || tab.restore?.sessionId === request.sessionId);
+      if (existing) {
+        setActiveId(existing.id);
+        setFocusId(existing.id);
+        if (existing.live === false) {
+          setTabs(current => current.map(tab => tab.id === existing.id ? { ...tab, live: undefined, restore: request, generation: tab.generation + 1 } : tab));
+        } else if (existing.live) request.resolve();
+        else request.reject(new Error('This terminal is still opening.'));
+        return;
+      }
+      if (tabs.length >= 8) { request.reject(new Error('Close a terminal tab before opening another session (maximum 8).')); return; }
+      const id = nextTabId.current++;
+      setTabs(current => [...current, { id, generation: 0, name: request.name, restore: request }]);
+      setActiveId(id);
+      setFocusId(id);
+    }
+    window.addEventListener(REOPEN_TERMINAL_EVENT, reopen);
+    return () => window.removeEventListener(REOPEN_TERMINAL_EVENT, reopen);
+  }, [tabs]);
 
   useEffect(() => {
     const dialog = closeDialogRef.current;
@@ -573,7 +619,7 @@ export function TerminalWorkspace({ theme, autoTranslate = false, onTranslateSel
   }
 
   function restartTab(id: number) {
-    setTabs((current) => current.map((tab) => tab.id === id ? { ...tab, generation: tab.generation + 1 } : tab));
+    setTabs((current) => current.map((tab) => tab.id === id ? { ...tab, sessionId: undefined, live: undefined, restore: undefined, generation: tab.generation + 1 } : tab));
     setFocusId(id);
   }
 
@@ -715,6 +761,8 @@ export function TerminalWorkspace({ theme, autoTranslate = false, onTranslateSel
             tabId={`${idPrefix}-tab-${tab.id}`}
             panelId={`${idPrefix}-panel-${tab.id}`}
             onRestart={() => restartTab(tab.id)}
+            onStarted={(sessionId) => setTabs(current => current.map(item => item.id === tab.id ? { ...item, sessionId, live: true } : item))}
+            onStopped={() => setTabs(current => current.map(item => item.id === tab.id ? { ...item, live: false } : item))}
             autoTranslate={autoTranslate}
             onTranslateSelection={onTranslateSelection}
           />
@@ -723,7 +771,7 @@ export function TerminalWorkspace({ theme, autoTranslate = false, onTranslateSel
       <dialog ref={closeDialogRef} className={styles.closeDialog} aria-labelledby={`${idPrefix}-close-title`}
         aria-describedby={`${idPrefix}-close-description`} onCancel={event => { event.preventDefault(); cancelClose(); }}>
         <h3 id={`${idPrefix}-close-title`}>Close {pendingClose?.name}?</h3>
-        <p id={`${idPrefix}-close-description`}>This will stop the terminal session and any commands running in it.</p>
+        <p id={`${idPrefix}-close-description`}>This will stop the shell and any commands running in it. Its saved output and connected AI conversation can be opened again from Desk Companion → Sessions.</p>
         <div className={styles.dialogActions}>
           <button ref={cancelCloseRef} type="button" onClick={cancelClose}>Cancel</button>
           <button type="button" className={styles.confirmClose} onClick={() => {

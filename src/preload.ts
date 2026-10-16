@@ -5,6 +5,7 @@ import type { SystemMetricsSample } from './shared/system-metrics-types';
 import type { NotesWorkspaceState } from './shared/notes-workspace-types';
 import type { CompanionSnapshot } from './shared/companion-types';
 import type { AiSettings } from './shared/ai-settings-types';
+import type { TerminalSessionsSnapshot } from './shared/terminal-types';
 
 type WindowAction = 'minimize' | 'toggle-maximize' | 'toggle-always-on-top' | 'close';
 
@@ -36,7 +37,18 @@ const desktopApi: DesktopApi = {
     ipcRenderer.on('window:state-changed', callback);
     return () => ipcRenderer.removeListener('window:state-changed', callback);
   },
-  createTerminal: (cols, rows) => ipcRenderer.invoke('terminal:create', { cols, rows }),
+  createTerminal: (cols, rows, options) => ipcRenderer.invoke('terminal:create', { cols, rows, ...options }),
+  sessions: {
+    list: () => ipcRenderer.invoke('terminal-sessions:list'),
+    read: (id) => ipcRenderer.invoke('terminal-sessions:read', id),
+    connect: (id, ai) => ipcRenderer.invoke('terminal-sessions:connect', id, ai),
+    remove: (id) => ipcRenderer.invoke('terminal-sessions:remove', id),
+    onUpdate: (listener) => {
+      const callback = (_event: Electron.IpcRendererEvent, snapshot: TerminalSessionsSnapshot) => listener(snapshot);
+      ipcRenderer.on('terminal-sessions:update', callback);
+      return () => ipcRenderer.removeListener('terminal-sessions:update', callback);
+    },
+  },
   writeTerminal: async (id, data) => { await ipcRenderer.invoke('terminal:write', { id, data }); },
   resizeTerminal: async (id, cols, rows) => { await ipcRenderer.invoke('terminal:resize', { id, cols, rows }); },
   closeTerminal: async (id) => { await ipcRenderer.invoke('terminal:close', { id }); },

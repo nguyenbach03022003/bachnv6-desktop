@@ -11,6 +11,7 @@ import { registerTranslationIpc } from './translation-service';
 import { registerVocabularyIpc } from './vocabulary-service';
 import { registerNotesWindows } from './notes-windows';
 import { registerCompanionIpc } from './companion-service';
+import { registerTerminalHistoryIpc } from './terminal-history-service';
 import { registerAiSettingsIpc } from './ai-settings-service';
 import { registerAiCliLifecycle } from './ai-cli';
 
@@ -116,8 +117,9 @@ if (!handlingSquirrelEvent) app.whenReady().then(() => {
 
   registerAiSettingsIpc(() => mainWindow);
   registerAiCliLifecycle();
-  const companion = registerCompanionIpc(() => mainWindow);
-  registerTerminalIpc(() => mainWindow, companion.trackTerminal);
+  const terminalHistory = registerTerminalHistoryIpc(() => mainWindow);
+  const companion = registerCompanionIpc(() => mainWindow, terminalHistory);
+  registerTerminalIpc(() => mainWindow, terminalHistory, companion.trackTerminal);
   const notes = registerNotesIpc(() => notesWindows.getEditorWindow());
   const notesWindows = registerNotesWindows(() => mainWindow, loadRenderer, notes.readImage, createMainWindow);
   registerVocabularyIpc(() => notesWindows.getEditorWindow());

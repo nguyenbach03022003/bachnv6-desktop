@@ -37,7 +37,7 @@ if (!process.versions.electron) {
   try {
     const stages = process.env.COMPANION_LIVE_CHAT === '1' ? ['live'] : ['create', 'restore', 'cleared'];
     for (const stage of stages) {
-      const result = spawnSync(require('electron'), [__filename], { cwd: root, stdio: 'inherit', windowsHide: true, timeout: 150000,
+      const result = spawnSync(require('electron'), [...(process.env.DESKTOP_SMOKE_NO_SANDBOX === '1' ? ['--no-sandbox'] : []), __filename], { cwd: root, stdio: 'inherit', windowsHide: true, timeout: 150000,
         env: { ...process.env, COMPANION_PROFILE: profile, COMPANION_STAGE: stage, ...(stage !== 'live' ? { PATH: taskPath, Path: taskPath } : {}) } });
       assert.equal(result.status, 0, `${stage}: ${result.error?.message || result.signal || result.status}`);
     }
@@ -99,7 +99,7 @@ if (!process.versions.electron) {
         assert(state.reports.some(report => report.task === 'Fix login' && report.message.includes('Tests passed')));
         assert.equal(state.busy, false);
         check('Chat, UTF-8 text, and reports restore after restart');
-        await run(`document.querySelector('[aria-label="Companion view"] button:last-child').click()`);
+        await run(`document.querySelector('[aria-label="Companion view"] button:nth-child(2)').click()`);
         await clickText('[aria-label="Saved progress reports"]', 'Open terminal');
         await until(`document.querySelector('[aria-label="Desk companion"] [role="alert"]')?.textContent.includes('has closed')`, 'archived report feedback');
         check('Closed terminal reports remain readable with accurate feedback');
